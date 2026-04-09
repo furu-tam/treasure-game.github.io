@@ -20,6 +20,7 @@ let gameActive = false;
 let cells = [];
 let treasureIndex = -1;
 let bombSet = new Set();
+let nextExpectedNumber = 1;
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 let audioCtx = null;
 
@@ -175,12 +176,22 @@ function pickRoles(total, bombCount) {
   } while (bombSet.has(treasureIndex));
 }
 
-function assignRole(btn, index) {
+function createShuffledNumbers(total) {
+  const numbers = Array.from({ length: total }, (_, i) => i + 1);
+  for (let i = numbers.length - 1; i > 0; i -= 1) {
+    const j = randInt(0, i);
+    [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+  }
+  return numbers;
+}
+
+function assignRole(btn, index, orderNumber) {
   btn.classList.remove("safe", "treasure", "bomb");
   btn.classList.add("hidden");
   btn.dataset.revealed = "false";
   btn.dataset.role = "safe";
-  btn.textContent = "Button";
+  btn.dataset.order = String(orderNumber);
+  btn.textContent = String(orderNumber);
 
   if (index === treasureIndex) {
     btn.dataset.role = "treasure";
@@ -232,6 +243,8 @@ function randomizeMap() {
   const positions = getRandomPositions(total);
   const realTotal = positions.length;
   const realBombCount = Math.min(bombCount, Math.max(1, realTotal - 1));
+  const shuffledNumbers = createShuffledNumbers(realTotal);
+  nextExpectedNumber = 1;
   pickRoles(realTotal, realBombCount);
 
   clearArenaButtons();
@@ -244,11 +257,17 @@ function randomizeMap() {
     btn.setAttribute("aria-label", `o-${i + 1}`);
     btn.style.left = `${positions[i].x}px`;
     btn.style.top = `${positions[i].y}px`;
-    assignRole(btn, i);
+    assignRole(btn, i, shuffledNumbers[i]);
 
     btn.addEventListener("click", () => {
       if (!gameActive) return;
       if (btn.dataset.revealed === "true") return;
+      const clickedNumber = Number(btn.dataset.order);
+      if (clickedNumber !== nextExpectedNumber) {
+        messageText.textContent = `Ban phai bam dung thu tu: ${nextExpectedNumber} truoc.`;
+        return;
+      }
+      nextExpectedNumber += 1;
 
       const role = revealTile(btn);
       if (role === "bomb") {
@@ -293,7 +312,7 @@ function startGame(resetPoint = false) {
   applyRandomBackground();
   syncTileSizeForScreen();
   playSfx("start");
-  messageText.textContent = "Dang choi: tim kho bau va tranh boom.";
+  messageText.textContent = "Dang choi: bam so theo thu tu tu be den lon, tim kho bau va tranh boom.";
   randomizeMap();
 }
 
