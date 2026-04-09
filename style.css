@@ -172,6 +172,20 @@ input {
   white-space: nowrap;
 }
 
+.target-pill {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.2), 0 0 20px rgba(239, 68, 68, 0.18);
+}
+
+#targetText {
+  color: #ef4444;
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 1;
+  margin-left: 4px;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
+}
+
 .message {
   min-height: 24px;
   color: #fcd34d;
