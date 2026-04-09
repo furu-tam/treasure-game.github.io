@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Tim Kho Bau</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section class="topbar">
+    <div class="controls">
+      <label>
+        So nut (N)
+        <input id="totalButtonsInput" type="number" min="2" max="250" value="25" />
+      </label>
+      <label>
+        So boom (X)
+        <input id="bombCountInput" type="number" min="1" max="249" value="5" />
+      </label>
+      <button class="btn btn-start" id="startBtn">Start / Restart</button>
+      <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
+    </div>
+    <div class="stats">
+      <span class="pill">Diem: <strong id="scoreText">0</strong></span>
+      <span class="pill">Kho bau tim duoc: <strong id="treasureText">0</strong></span>
+      <span class="pill">Trang thai: <strong id="stateText">Chua bat dau</strong></span>
+    </div>
+  </section>
+
+  <div class="message" id="messageText">
+    Chon N va X, sau do bam Start de choi.
+  </div>
+
+  <main class="arena" id="arena">
+    <div class="overlay" id="overlay">
+      <div class="card">
+        <h2 id="resultTitle">Game Over</h2>
+        <p id="resultText"></p>
+        <button class="btn btn-start" id="playAgainBtn">Choi Lai</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
