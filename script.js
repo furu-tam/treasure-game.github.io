@@ -11,6 +11,7 @@ const resetBtn = document.getElementById("resetBtn");
 
 const scoreText = document.getElementById("scoreText");
 const treasureText = document.getElementById("treasureText");
+const targetText = document.getElementById("targetText");
 const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
 
@@ -20,7 +21,7 @@ let gameActive = false;
 let cells = [];
 let treasureIndex = -1;
 let bombSet = new Set();
-let nextExpectedNumber = 1;
+let currentTargetNumber = null;
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 let audioCtx = null;
 
@@ -31,6 +32,7 @@ function randInt(min, max) {
 function updateHud() {
   scoreText.textContent = String(score);
   treasureText.textContent = String(treasureFound);
+  targetText.textContent = currentTargetNumber === null ? "-" : String(currentTargetNumber);
   stateText.textContent = gameActive ? "Dang choi" : "Da dung";
 }
 
@@ -223,8 +225,25 @@ function revealTile(btn) {
   return role;
 }
 
+function pickNextTargetNumber() {
+  const unrevealedNumbers = cells
+    .filter((btn) => btn.dataset.revealed !== "true")
+    .map((btn) => Number(btn.dataset.order))
+    .filter((num) => Number.isFinite(num));
+
+  if (unrevealedNumbers.length === 0) {
+    currentTargetNumber = null;
+    return false;
+  }
+
+  const randomIndex = randInt(0, unrevealedNumbers.length - 1);
+  currentTargetNumber = unrevealedNumbers[randomIndex];
+  return true;
+}
+
 function endGame(isBombClick) {
   gameActive = false;
+  currentTargetNumber = null;
   updateHud();
   playSfx(isBombClick ? "boom" : "safe");
 
@@ -244,7 +263,7 @@ function randomizeMap() {
   const realTotal = positions.length;
   const realBombCount = Math.min(bombCount, Math.max(1, realTotal - 1));
   const shuffledNumbers = createShuffledNumbers(realTotal);
-  nextExpectedNumber = 1;
+  currentTargetNumber = null;
   pickRoles(realTotal, realBombCount);
 
   clearArenaButtons();
@@ -263,11 +282,10 @@ function randomizeMap() {
       if (!gameActive) return;
       if (btn.dataset.revealed === "true") return;
       const clickedNumber = Number(btn.dataset.order);
-      if (clickedNumber !== nextExpectedNumber) {
-        messageText.textContent = `Ban phai bam dung thu tu: ${nextExpectedNumber} truoc.`;
+      if (clickedNumber !== currentTargetNumber) {
+        messageText.textContent = `Ban phai bam dung so muc tieu: ${currentTargetNumber}.`;
         return;
       }
-      nextExpectedNumber += 1;
 
       const role = revealTile(btn);
       if (role === "bomb") {
@@ -294,11 +312,22 @@ function randomizeMap() {
           }
         }, 540);
       }
+
+      const hasNext = pickNextTargetNumber();
+      updateHud();
+      if (!hasNext) {
+        endGame(false);
+        return;
+      }
+      messageText.textContent = `So muc tieu tiep theo: ${currentTargetNumber}.`;
     });
 
     cells.push(btn);
     arena.appendChild(btn);
   }
+  pickNextTargetNumber();
+  updateHud();
+  messageText.textContent = `So muc tieu hien tai: ${currentTargetNumber}.`;
 }
 
 function startGame(resetPoint = false) {
@@ -312,7 +341,6 @@ function startGame(resetPoint = false) {
   applyRandomBackground();
   syncTileSizeForScreen();
   playSfx("start");
-  messageText.textContent = "Dang choi: bam so theo thu tu tu be den lon, tim kho bau va tranh boom.";
   randomizeMap();
 }
 
