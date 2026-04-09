@@ -260,9 +260,8 @@ function randomizeMap() {
         playSfx("treasure");
         score += 10;
         treasureFound += 1;
-        messageText.textContent = "Chuc mung! Ban vua tim thay kho bau.";
+        messageText.textContent = "Chuc mung! Ban vua nhan duoc 1 kho bau.";
         updateHud();
-        randomizeMap();
       } else {
         playSfx("safe");
         score = Math.max(0, score - 1);
