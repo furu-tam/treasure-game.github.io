@@ -123,6 +123,14 @@ label {
   padding: 6px 8px;
 }
 
+label.mp-toggle {
+  user-select: none;
+}
+
+.mp-status {
+  font-size: 13px;
+}
+
 input {
   width: 88px;
   padding: 6px;

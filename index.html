@@ -19,6 +19,20 @@
       </label>
       <button class="btn btn-start" id="startBtn">Start / Restart</button>
       <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
+      <label class="mp-toggle">
+        <input id="mpEnabledInput" type="checkbox" />
+        Multiplayer (WebSocket)
+      </label>
+      <label>
+        WS URL
+        <input id="wsUrlInput" type="text" placeholder="ws://localhost:8080" style="width: 200px" />
+      </label>
+      <label>
+        Phong
+        <input id="roomIdInput" type="text" maxlength="64" placeholder="room-1" style="width: 120px" />
+      </label>
+      <button class="btn btn-reset" type="button" id="mpConnectBtn">Ket noi phong</button>
+      <span class="pill mp-status" id="mpStatusText">Offline</span>
     </div>
     <div class="stats">
       <span class="pill">Diem: <strong id="scoreText">0</strong></span>

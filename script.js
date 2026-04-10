@@ -15,6 +15,12 @@ const targetText = document.getElementById("targetText");
 const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
 
+const mpEnabledInput = document.getElementById("mpEnabledInput");
+const wsUrlInput = document.getElementById("wsUrlInput");
+const roomIdInput = document.getElementById("roomIdInput");
+const mpConnectBtn = document.getElementById("mpConnectBtn");
+const mpStatusText = document.getElementById("mpStatusText");
+
 let score = 0;
 let treasureFound = 0;
 let gameActive = false;
@@ -22,8 +28,23 @@ let cells = [];
 let treasureIndex = -1;
 let bombSet = new Set();
 let currentTargetNumber = null;
+let lastEndWasBomb = false;
+let hostArenaWidth = 1;
+let hostArenaHeight = 1;
+
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 let audioCtx = null;
+
+/** @type {WebSocket | null} */
+let mpSocket = null;
+let mpRoomId = "";
+let mpClientId = "";
+let isRoomHost = false;
+let applyingRemoteState = false;
+
+function mpConnected() {
+  return mpSocket !== null && mpSocket.readyState === WebSocket.OPEN;
+}
 
 function randInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -102,6 +123,240 @@ function playSfx(type) {
     playTone(360, 0.08, "sine", 0.03);
     setTimeout(() => playTone(480, 0.08, "sine", 0.03), 70);
   }
+}
+
+function disconnectMultiplayer() {
+  if (mpSocket) {
+    mpSocket.close();
+    mpSocket = null;
+  }
+  mpRoomId = "";
+  mpClientId = "";
+  isRoomHost = false;
+  mpStatusText.textContent = "Offline";
+}
+
+function sendRoomMsg(data, { excludeSelf = false, toHostOnly = false } = {}) {
+  if (!mpConnected()) return;
+  mpSocket.send(JSON.stringify({ type: "room_msg", data, excludeSelf, toHostOnly }));
+}
+
+function getCurrentThemeClass() {
+  if (document.body.classList.contains("bg-ocean")) return "bg-ocean";
+  if (document.body.classList.contains("bg-space")) return "bg-space";
+  if (document.body.classList.contains("bg-landscape")) return "bg-landscape";
+  return "bg-ocean";
+}
+
+function broadcastFullState() {
+  if (!mpConnected() || !isRoomHost || applyingRemoteState) return;
+  const w = Math.max(1, hostArenaWidth);
+  const h = Math.max(1, hostArenaHeight);
+  const tiles = cells.map((btn) => ({
+    nx: parseFloat(btn.style.left) / w,
+    ny: parseFloat(btn.style.top) / h,
+    order: Number(btn.dataset.order),
+    role: btn.dataset.role,
+    revealed: btn.dataset.revealed === "true"
+  }));
+  const ended = !gameActive && overlay.classList.contains("show");
+  sendRoomMsg(
+    {
+      kind: "full_state",
+      score,
+      treasureFound,
+      gameActive,
+      currentTargetNumber,
+      theme: getCurrentThemeClass(),
+      totalInput: totalButtonsInput.value,
+      bombInput: bombCountInput.value,
+      ended,
+      bombEnd: lastEndWasBomb,
+      hostArenaW: w,
+      hostArenaH: h,
+      tiles
+    },
+    { excludeSelf: true }
+  );
+}
+
+function revealVisual(btn, role) {
+  btn.classList.remove("hidden", "safe", "treasure", "bomb");
+  if (role === "treasure") {
+    btn.classList.add("treasure");
+    btn.textContent = "💎";
+    return;
+  }
+  if (role === "bomb") {
+    btn.classList.add("bomb");
+    btn.textContent = "💣";
+    return;
+  }
+  btn.classList.add("safe");
+  btn.textContent = "OK";
+}
+
+function setupHiddenTile(btn, order, role) {
+  btn.classList.remove("safe", "treasure", "bomb");
+  btn.classList.add("hidden");
+  btn.dataset.revealed = "false";
+  btn.dataset.role = role;
+  btn.dataset.order = String(order);
+  btn.textContent = String(order);
+}
+
+function applyFullState(payload) {
+  applyingRemoteState = true;
+  try {
+    score = payload.score;
+    treasureFound = payload.treasureFound;
+    gameActive = payload.gameActive;
+    currentTargetNumber =
+      payload.currentTargetNumber === null || payload.currentTargetNumber === undefined
+        ? null
+        : payload.currentTargetNumber;
+
+    totalButtonsInput.value = String(payload.totalInput ?? totalButtonsInput.value);
+    bombCountInput.value = String(payload.bombInput ?? bombCountInput.value);
+
+    document.body.classList.remove(...BACKGROUND_THEMES);
+    const theme = BACKGROUND_THEMES.includes(payload.theme) ? payload.theme : "bg-ocean";
+    document.body.classList.add(theme);
+
+    if (!payload.ended) {
+      overlay.classList.remove("show");
+    }
+
+    clearArenaButtons();
+    cells = [];
+    treasureIndex = -1;
+    bombSet.clear();
+
+    const aw = Math.max(1, arena.clientWidth);
+    const ah = Math.max(1, arena.clientHeight);
+
+    payload.tiles.forEach((t, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "tile";
+      btn.type = "button";
+      btn.setAttribute("aria-label", `o-${idx + 1}`);
+      btn.style.left = `${(t.nx ?? 0) * aw}px`;
+      btn.style.top = `${(t.ny ?? 0) * ah}px`;
+
+      const role = t.role === "treasure" || t.role === "bomb" ? t.role : "safe";
+      if (t.revealed) {
+        btn.dataset.revealed = "true";
+        btn.dataset.role = role;
+        btn.dataset.order = String(t.order);
+        revealVisual(btn, role);
+      } else {
+        setupHiddenTile(btn, t.order, role);
+      }
+
+      btn.addEventListener("click", () => handleTileClick(btn));
+      cells.push(btn);
+      arena.appendChild(btn);
+    });
+
+    updateHud();
+
+    if (payload.ended) {
+      endGame(Boolean(payload.bombEnd), { silent: true });
+    }
+  } finally {
+    applyingRemoteState = false;
+  }
+}
+
+function handleIncomingRoomData(data) {
+  if (data.kind === "full_state") {
+    applyFullState(data);
+    return;
+  }
+  if (data.kind === "lobby") {
+    messageText.textContent = "Da vao phong. Doi host bat dau (Start).";
+    return;
+  }
+  if (data.kind === "guest_click" && isRoomHost) {
+    const order = Number(data.order);
+    const btn = cells.find(
+      (b) => Number(b.dataset.order) === order && b.dataset.revealed !== "true"
+    );
+    if (btn) {
+      handleTileClick(btn, { fromPeer: true });
+    }
+    return;
+  }
+  if (data.kind === "need_state" && isRoomHost) {
+    if (gameActive || cells.length > 0) {
+      broadcastFullState();
+    } else {
+      sendRoomMsg({ kind: "lobby" }, { excludeSelf: true });
+    }
+    return;
+  }
+}
+
+function connectMultiplayer() {
+  if (!mpEnabledInput.checked) {
+    messageText.textContent = "Hay bat Multiplayer truoc khi ket noi.";
+    return;
+  }
+  const url = (wsUrlInput.value || "").trim() || "ws://localhost:8080";
+  const rid = (roomIdInput.value || "").trim() || "default";
+  disconnectMultiplayer();
+  mpStatusText.textContent = "Dang ket noi...";
+
+  const socket = new WebSocket(url);
+  mpSocket = socket;
+
+  socket.addEventListener("open", () => {
+    mpRoomId = rid;
+    socket.send(JSON.stringify({ type: "join", roomId: rid }));
+  });
+
+  socket.addEventListener("message", (ev) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(ev.data));
+    } catch {
+      return;
+    }
+
+    if (msg.type === "joined") {
+      mpRoomId = msg.roomId || mpRoomId;
+      mpClientId = msg.clientId || "";
+      isRoomHost = Boolean(msg.isHost);
+      mpStatusText.textContent = isRoomHost ? `Host · ${mpRoomId}` : `Khach · ${mpRoomId}`;
+      if (!isRoomHost) {
+        sendRoomMsg({ kind: "need_state" }, { toHostOnly: true });
+      }
+      return;
+    }
+
+    if (msg.type === "promoted_host") {
+      isRoomHost = true;
+      mpStatusText.textContent = `Host · ${mpRoomId}`;
+      messageText.textContent = "Ban tro thanh host. Bam Start de bat dau van moi.";
+      return;
+    }
+
+    if (msg.type === "room_msg" && msg.data) {
+      handleIncomingRoomData(msg.data);
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    mpStatusText.textContent = "Offline";
+    mpSocket = null;
+    mpRoomId = "";
+    mpClientId = "";
+    isRoomHost = false;
+  });
+
+  socket.addEventListener("error", () => {
+    mpStatusText.textContent = "Loi ket noi";
+  });
 }
 
 function clearArenaButtons() {
@@ -206,22 +461,9 @@ function assignRole(btn, index, orderNumber) {
 
 function revealTile(btn) {
   const role = btn.dataset.role;
-  btn.classList.remove("hidden");
   btn.dataset.revealed = "true";
-
-  if (role === "treasure") {
-    btn.classList.add("treasure");
-    btn.textContent = "💎";
-    return role;
-  }
-  if (role === "bomb") {
-    btn.classList.add("bomb");
-    btn.textContent = "💣";
-    return role;
-  }
-
-  btn.classList.add("safe");
-  btn.textContent = "OK";
+  btn.classList.remove("hidden");
+  revealVisual(btn, role);
   return role;
 }
 
@@ -241,11 +483,14 @@ function pickNextTargetNumber() {
   return true;
 }
 
-function endGame(isBombClick) {
+function endGame(isBombClick, { silent = false } = {}) {
   gameActive = false;
   currentTargetNumber = null;
+  lastEndWasBomb = isBombClick;
   updateHud();
-  playSfx(isBombClick ? "boom" : "safe");
+  if (!silent) {
+    playSfx(isBombClick ? "boom" : "safe");
+  }
 
   resultTitle.textContent = isBombClick ? "Game Over" : "Ket thuc";
   resultText.innerHTML = isBombClick
@@ -255,6 +500,71 @@ function endGame(isBombClick) {
   messageText.textContent = isBombClick
     ? "Boom no! Bam Start de choi lai."
     : "Game ket thuc.";
+
+  if (mpConnected() && isRoomHost && !applyingRemoteState) {
+    broadcastFullState();
+  }
+}
+
+function handleTileClick(btn, { fromPeer = false } = {}) {
+  if (!gameActive) return;
+  if (btn.dataset.revealed === "true") return;
+
+  if (mpConnected() && !isRoomHost && !fromPeer) {
+    sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
+    return;
+  }
+
+  const clickedNumber = Number(btn.dataset.order);
+  if (clickedNumber !== currentTargetNumber) {
+    messageText.textContent = `Ban phai bam dung so muc tieu: ${currentTargetNumber}.`;
+    return;
+  }
+
+  const role = revealTile(btn);
+  if (role === "bomb") {
+    endGame(true);
+    return;
+  }
+
+  if (role === "treasure") {
+    if (!fromPeer) {
+      playSfx("treasure");
+    }
+    score += 10;
+    treasureFound += 1;
+    messageText.textContent = "Chuc mung! Ban vua nhan duoc 1 kho bau.";
+    updateHud();
+  } else {
+    if (!fromPeer) {
+      playSfx("safe");
+    }
+    score = Math.max(0, score - 1);
+    messageText.textContent = "Khong co gi o day. Thu lai!";
+    updateHud();
+    btn.classList.add("vanish");
+    setTimeout(() => {
+      if (btn.parentElement) {
+        btn.remove();
+        cells = cells.filter((item) => item !== btn);
+      }
+      if (mpConnected() && isRoomHost) {
+        broadcastFullState();
+      }
+    }, 540);
+  }
+
+  const hasNext = pickNextTargetNumber();
+  updateHud();
+  if (!hasNext) {
+    endGame(false);
+    return;
+  }
+  messageText.textContent = `So muc tieu tiep theo: ${currentTargetNumber}.`;
+
+  if (mpConnected() && isRoomHost) {
+    broadcastFullState();
+  }
 }
 
 function randomizeMap() {
@@ -265,6 +575,9 @@ function randomizeMap() {
   const shuffledNumbers = createShuffledNumbers(realTotal);
   currentTargetNumber = null;
   pickRoles(realTotal, realBombCount);
+
+  hostArenaWidth = Math.max(1, arena.clientWidth);
+  hostArenaHeight = Math.max(1, arena.clientHeight);
 
   clearArenaButtons();
   cells = [];
@@ -278,49 +591,7 @@ function randomizeMap() {
     btn.style.top = `${positions[i].y}px`;
     assignRole(btn, i, shuffledNumbers[i]);
 
-    btn.addEventListener("click", () => {
-      if (!gameActive) return;
-      if (btn.dataset.revealed === "true") return;
-      const clickedNumber = Number(btn.dataset.order);
-      if (clickedNumber !== currentTargetNumber) {
-        messageText.textContent = `Ban phai bam dung so muc tieu: ${currentTargetNumber}.`;
-        return;
-      }
-
-      const role = revealTile(btn);
-      if (role === "bomb") {
-        endGame(true);
-        return;
-      }
-
-      if (role === "treasure") {
-        playSfx("treasure");
-        score += 10;
-        treasureFound += 1;
-        messageText.textContent = "Chuc mung! Ban vua nhan duoc 1 kho bau.";
-        updateHud();
-      } else {
-        playSfx("safe");
-        score = Math.max(0, score - 1);
-        messageText.textContent = "Khong co gi o day. Thu lai!";
-        updateHud();
-        btn.classList.add("vanish");
-        setTimeout(() => {
-          if (btn.parentElement) {
-            btn.remove();
-            cells = cells.filter((item) => item !== btn);
-          }
-        }, 540);
-      }
-
-      const hasNext = pickNextTargetNumber();
-      updateHud();
-      if (!hasNext) {
-        endGame(false);
-        return;
-      }
-      messageText.textContent = `So muc tieu tiep theo: ${currentTargetNumber}.`;
-    });
+    btn.addEventListener("click", () => handleTileClick(btn));
 
     cells.push(btn);
     arena.appendChild(btn);
@@ -328,9 +599,18 @@ function randomizeMap() {
   pickNextTargetNumber();
   updateHud();
   messageText.textContent = `So muc tieu hien tai: ${currentTargetNumber}.`;
+
+  if (mpConnected() && isRoomHost) {
+    broadcastFullState();
+  }
 }
 
 function startGame(resetPoint = false) {
+  if (mpConnected() && !isRoomHost) {
+    messageText.textContent = "Ban la khach: chi host duoc bat dau van (Start).";
+    return;
+  }
+
   if (resetPoint) {
     score = 0;
     treasureFound = 0;
@@ -346,10 +626,23 @@ function startGame(resetPoint = false) {
 
 startBtn.addEventListener("click", () => startGame(false));
 playAgainBtn.addEventListener("click", () => startGame(false));
-resetBtn.addEventListener("click", () => startGame(true));
+resetBtn.addEventListener("click", () => {
+  if (mpConnected() && !isRoomHost) {
+    messageText.textContent = "Chi host duoc reset diem.";
+    return;
+  }
+  startGame(true);
+});
+
+mpConnectBtn.addEventListener("click", () => {
+  connectMultiplayer();
+});
 
 window.addEventListener("resize", () => {
   syncTileSizeForScreen();
+  if (mpConnected() && gameActive) {
+    return;
+  }
   if (!gameActive) return;
   randomizeMap();
 });
