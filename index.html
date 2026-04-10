@@ -8,7 +8,7 @@
 </head>
 <body>
   <section class="step-card" id="stepConnect">
-    <h2>Step 1: Cau hinh WebSocket</h2>
+    <h2>Step 1: Setting</h2>
     <div class="controls">
       <label>
         Ten nguoi choi
@@ -18,29 +18,31 @@
         Phong
         <input id="roomIdInput" type="text" maxlength="64" placeholder="room-1" style="width: 140px" />
       </label>
-      <button class="btn btn-start" type="button" id="mpConnectBtn">Ket noi phong</button>
+      <button class="btn btn-start" type="button" id="mpConnectBtn">OK</button>
       <span class="pill mp-status" id="mpStatusText">Offline</span>
     </div>
   </section>
 
   <section class="game-step section-hidden" id="stepGame">
+    <h2>Step 2: Choi game</h2>
     <section class="topbar">
     <div class="controls">
-      <label>
+      <label id="hostTotalWrap">
         So nut (N)
         <input id="totalButtonsInput" type="number" min="2" max="250" value="25" />
       </label>
-      <label>
+      <label id="hostBombWrap">
         So boom (X)
         <input id="bombCountInput" type="number" min="1" max="249" value="5" />
       </label>
-      <button class="btn btn-start" id="startBtn">Start / Restart</button>
+      <button class="btn btn-start" id="startBtn">Start Game</button>
       <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
+      <span class="pill section-hidden" id="guestLoadingText">Dang doi chu phong start game...</span>
     </div>
     <div class="stats">
       <span class="pill">Diem: <strong id="scoreText">0</strong></span>
       <span class="pill">Kho bau tim duoc: <strong id="treasureText">0</strong></span>
-      <span class="pill target-pill">So muc tieu: <strong id="targetText">-</strong></span>
+      <span class="pill target-pill">So boom da mo: <strong id="bombText">0</strong></span>
       <span class="pill">Trang thai: <strong id="stateText">Chua bat dau</strong></span>
     </div>
     </section>

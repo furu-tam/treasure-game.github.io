@@ -6,6 +6,9 @@ const playAgainBtn = document.getElementById("playAgainBtn");
 const leaderboard = document.getElementById("leaderboard");
 const stepConnect = document.getElementById("stepConnect");
 const stepGame = document.getElementById("stepGame");
+const hostTotalWrap = document.getElementById("hostTotalWrap");
+const hostBombWrap = document.getElementById("hostBombWrap");
+const guestLoadingText = document.getElementById("guestLoadingText");
 
 const totalButtonsInput = document.getElementById("totalButtonsInput");
 const bombCountInput = document.getElementById("bombCountInput");
@@ -14,7 +17,7 @@ const resetBtn = document.getElementById("resetBtn");
 
 const scoreText = document.getElementById("scoreText");
 const treasureText = document.getElementById("treasureText");
-const targetText = document.getElementById("targetText");
+const bombText = document.getElementById("bombText");
 const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
 
@@ -22,26 +25,24 @@ const playerNameInput = document.getElementById("playerNameInput");
 const roomIdInput = document.getElementById("roomIdInput");
 const mpConnectBtn = document.getElementById("mpConnectBtn");
 const mpStatusText = document.getElementById("mpStatusText");
+
 const WS_SERVER_URL = "wss://treasure-game-github-io.onrender.com";
+const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 
 let gameActive = false;
 let cells = [];
 let bombSet = new Set();
 let treasureSet = new Set();
-let currentTargetNumber = null;
 let hostArenaWidth = 1;
 let hostArenaHeight = 1;
 let applyingRemoteState = false;
-let lastEndWasBomb = false;
 
 let mpSocket = null;
-let mpRoomId = "";
 let mpClientId = "";
+let mpRoomId = "";
 let isRoomHost = false;
 let myPlayerName = "";
 const playerStats = {};
-
-const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 
 function mpConnected() {
   return mpSocket !== null && mpSocket.readyState === WebSocket.OPEN;
@@ -54,40 +55,47 @@ function randInt(min, max) {
 function ensurePlayer(id, name = "Player") {
   if (!id) return;
   if (!playerStats[id]) {
-    playerStats[id] = { name, score: 0, treasure: 0 };
+    playerStats[id] = { name, score: 0, treasure: 0, bombHit: 0 };
   } else if (name) {
     playerStats[id].name = name;
   }
 }
 
 function removePlayer(id) {
-  if (playerStats[id]) {
-    delete playerStats[id];
-  }
-}
-
-function renderLeaderboard() {
-  const entries = Object.entries(playerStats).sort((a, b) => b[1].score - a[1].score);
-  const rows = entries
-    .map(([id, p]) => {
-      const me = id === mpClientId ? " (ban)" : "";
-      return `<div class="leaderboard-item"><span>${p.name}${me}</span><strong>${p.score} | 💎 ${p.treasure}</strong></div>`;
-    })
-    .join("");
-  leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
+  delete playerStats[id];
 }
 
 function myStat() {
-  return playerStats[mpClientId] || { score: 0, treasure: 0 };
+  return playerStats[mpClientId] || { score: 0, treasure: 0, bombHit: 0 };
+}
+
+function renderLeaderboard() {
+  const rows = Object.entries(playerStats)
+    .sort((a, b) => b[1].score - a[1].score)
+    .map(([id, p]) => {
+      const me = id === mpClientId ? " (ban)" : "";
+      return `<div class="leaderboard-item"><span>${p.name}${me}</span><strong>${p.score} | 💎 ${p.treasure} | 💣 ${p.bombHit}</strong></div>`;
+    })
+    .join("");
+  leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
 }
 
 function updateHud() {
   const me = myStat();
   scoreText.textContent = String(me.score);
   treasureText.textContent = String(me.treasure);
-  targetText.textContent = currentTargetNumber === null ? "-" : String(currentTargetNumber);
+  bombText.textContent = String(me.bombHit);
   stateText.textContent = gameActive ? "Dang choi" : "Da dung";
   renderLeaderboard();
+}
+
+function applyHostPermissions() {
+  const host = isRoomHost;
+  hostTotalWrap.classList.toggle("section-hidden", !host);
+  hostBombWrap.classList.toggle("section-hidden", !host);
+  startBtn.classList.toggle("section-hidden", !host);
+  resetBtn.classList.toggle("section-hidden", !host);
+  guestLoadingText.classList.toggle("section-hidden", host);
 }
 
 function applyRandomBackground() {
@@ -136,16 +144,12 @@ function getRandomPositions(total) {
   const rows = Math.max(1, Math.floor((arenaHeight - padding * 2 + minGap) / step));
   const capacity = cols * rows;
   const finalTotal = Math.min(total, capacity);
-  if (finalTotal < total) {
-    totalButtonsInput.value = String(finalTotal);
-  }
+  totalButtonsInput.value = String(finalTotal);
   const grid = [];
   const offsetX = Math.max(padding, Math.floor((arenaWidth - cols * step + minGap) / 2));
   const offsetY = Math.max(padding, Math.floor((arenaHeight - rows * step + minGap) / 2));
   for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      grid.push({ x: offsetX + c * step, y: offsetY + r * step });
-    }
+    for (let c = 0; c < cols; c += 1) grid.push({ x: offsetX + c * step, y: offsetY + r * step });
   }
   for (let i = grid.length - 1; i > 0; i -= 1) {
     const j = randInt(0, i);
@@ -155,17 +159,18 @@ function getRandomPositions(total) {
 }
 
 function pickRoles(total, bombCount) {
-  const picked = new Set();
-  while (picked.size < bombCount) picked.add(randInt(0, total - 1));
-  bombSet = picked;
+  const bombs = new Set();
+  while (bombs.size < bombCount) bombs.add(randInt(0, total - 1));
+  bombSet = bombs;
+
   const maxTreasure = Math.max(1, Math.min(6, total - bombCount));
   const treasureCount = randInt(1, maxTreasure);
-  const pickedTreasure = new Set();
-  while (pickedTreasure.size < treasureCount) {
+  const treasures = new Set();
+  while (treasures.size < treasureCount) {
     const idx = randInt(0, total - 1);
-    if (!bombSet.has(idx)) pickedTreasure.add(idx);
+    if (!bombs.has(idx)) treasures.add(idx);
   }
-  treasureSet = pickedTreasure;
+  treasureSet = treasures;
 }
 
 function createShuffledNumbers(total) {
@@ -183,10 +188,10 @@ function setupHiddenTile(btn, order, role) {
   btn.dataset.revealed = "false";
   btn.dataset.role = role;
   btn.dataset.order = String(order);
-  btn.innerHTML = `<span class="bubble-icon">🫧</span><span class="bubble-number">${order}</span>`;
+  btn.textContent = String(order);
 }
 
-function revealVisual(btn, role) {
+function revealTile(btn, role) {
   btn.classList.remove("hidden", "safe", "treasure", "bomb");
   if (role === "treasure") {
     btn.classList.add("treasure");
@@ -198,27 +203,6 @@ function revealVisual(btn, role) {
     btn.classList.add("safe");
     btn.textContent = "OK";
   }
-}
-
-function pickNextTargetNumber() {
-  const hidden = cells
-    .filter((btn) => btn.dataset.revealed !== "true")
-    .map((btn) => Number(btn.dataset.order))
-    .filter((num) => Number.isFinite(num));
-  if (hidden.length === 0) {
-    currentTargetNumber = null;
-    return false;
-  }
-  currentTargetNumber = hidden[randInt(0, hidden.length - 1)];
-  return true;
-}
-
-function applyHostPermissions() {
-  const hostCanEdit = isRoomHost;
-  startBtn.disabled = !hostCanEdit;
-  resetBtn.disabled = !hostCanEdit;
-  totalButtonsInput.disabled = !hostCanEdit;
-  bombCountInput.disabled = !hostCanEdit;
 }
 
 function sendRoomMsg(data, { excludeSelf = false, toHostOnly = false } = {}) {
@@ -243,18 +227,14 @@ function broadcastFullState() {
     role: btn.dataset.role,
     revealed: btn.dataset.revealed === "true"
   }));
-  const ended = !gameActive && overlay.classList.contains("show");
   sendRoomMsg(
     {
       kind: "full_state",
       gameActive,
-      currentTargetNumber,
       theme: getThemeClass(),
       totalInput: totalButtonsInput.value,
       bombInput: bombCountInput.value,
       playerStats,
-      ended,
-      bombEnd: lastEndWasBomb,
       tiles
     },
     { excludeSelf: true }
@@ -265,17 +245,19 @@ function applyFullState(payload) {
   applyingRemoteState = true;
   try {
     gameActive = Boolean(payload.gameActive);
-    currentTargetNumber = payload.currentTargetNumber ?? null;
     totalButtonsInput.value = String(payload.totalInput ?? totalButtonsInput.value);
     bombCountInput.value = String(payload.bombInput ?? bombCountInput.value);
+
     Object.keys(playerStats).forEach((k) => delete playerStats[k]);
     Object.entries(payload.playerStats || {}).forEach(([k, v]) => {
-      playerStats[k] = { name: v.name, score: v.score, treasure: v.treasure };
+      playerStats[k] = { name: v.name, score: v.score, treasure: v.treasure, bombHit: v.bombHit || 0 };
     });
     ensurePlayer(mpClientId, myPlayerName);
+
     document.body.classList.remove(...BACKGROUND_THEMES);
     document.body.classList.add(BACKGROUND_THEMES.includes(payload.theme) ? payload.theme : "bg-ocean");
-    if (!payload.ended) overlay.classList.remove("show");
+    overlay.classList.remove("show");
+
     clearArenaButtons();
     cells = [];
     const aw = Math.max(1, arena.clientWidth);
@@ -291,7 +273,7 @@ function applyFullState(payload) {
         btn.dataset.revealed = "true";
         btn.dataset.role = t.role;
         btn.dataset.order = String(t.order);
-        revealVisual(btn, t.role);
+        revealTile(btn, t.role);
       } else {
         setupHiddenTile(btn, t.order, t.role);
       }
@@ -300,76 +282,69 @@ function applyFullState(payload) {
       arena.appendChild(btn);
     });
     updateHud();
-    if (payload.ended) endGame(Boolean(payload.bombEnd), { silent: true });
   } finally {
     applyingRemoteState = false;
   }
 }
 
-function endGame(isBombClick, { silent = false } = {}) {
+function endGame() {
   gameActive = false;
-  currentTargetNumber = null;
-  lastEndWasBomb = isBombClick;
   updateHud();
-  if (!silent) {
-    // audio optional
-  }
-  resultTitle.textContent = isBombClick ? "Game Over" : "Ket thuc";
-  resultText.innerHTML = isBombClick
-    ? "Da bam vao BOOM."
-    : "Ban da mo het cac o.";
+  resultTitle.textContent = "Ket thuc";
+  resultText.innerHTML = "Khong con o nao de mo.";
   overlay.classList.add("show");
-  messageText.textContent = isBombClick ? "Boom no! Cho host start lai." : "Van choi da ket thuc.";
+  messageText.textContent = "Van choi ket thuc. Doi chu phong Start game moi.";
   if (isRoomHost) broadcastFullState();
 }
 
 function updatePlayerScore(playerId, role) {
   ensurePlayer(playerId, playerId === mpClientId ? myPlayerName : "Player");
+  const p = playerStats[playerId];
   if (role === "treasure") {
-    playerStats[playerId].score += 10;
-    playerStats[playerId].treasure += 1;
-  } else if (role === "safe") {
-    playerStats[playerId].score = Math.max(0, playerStats[playerId].score - 1);
+    p.score += 10;
+    p.treasure += 1;
+  } else if (role === "bomb") {
+    p.bombHit += 1;
+    const penalty = p.bombHit * 10;
+    p.score -= penalty;
+  } else {
+    p.score = Math.max(0, p.score - 1);
   }
+}
+
+function hasAnyHiddenTile() {
+  return cells.some((btn) => btn.dataset.revealed !== "true");
 }
 
 function handleTileClick(btn, actorId = mpClientId) {
   if (!gameActive) return;
   if (btn.dataset.revealed === "true") return;
+
   if (mpConnected() && !isRoomHost) {
     sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
     return;
   }
-  const clickedNumber = Number(btn.dataset.order);
-  if (clickedNumber !== currentTargetNumber) {
-    messageText.textContent = `Ban phai bam so ${currentTargetNumber}.`;
-    return;
-  }
+
   const role = btn.dataset.role;
   btn.dataset.revealed = "true";
-  revealVisual(btn, role);
-  if (role === "bomb") {
-    endGame(true);
-    return;
-  }
+  revealTile(btn, role);
   updatePlayerScore(actorId, role);
-  if (role === "safe") {
-    btn.classList.add("vanish");
-    setTimeout(() => {
-      if (btn.parentElement) {
-        btn.remove();
-        cells = cells.filter((c) => c !== btn);
-      }
-      if (isRoomHost) broadcastFullState();
-    }, 540);
-  }
-  const hasNext = pickNextTargetNumber();
   updateHud();
-  if (!hasNext) {
-    endGame(false);
+
+  if (!hasAnyHiddenTile()) {
+    endGame();
     return;
   }
-  messageText.textContent = `So muc tieu tiep theo: ${currentTargetNumber}.`;
+
+  if (role === "bomb") {
+    const bombHits = playerStats[actorId]?.bombHit || 0;
+    messageText.textContent = `Trung boom! Lan ${bombHits}: -${bombHits * 10} diem.`;
+  } else if (role === "treasure") {
+    messageText.textContent = "Tim thay kho bau! +10 diem.";
+  } else {
+    messageText.textContent = "O trong. -1 diem.";
+  }
+
   if (isRoomHost) broadcastFullState();
 }
 
@@ -377,13 +352,15 @@ function randomizeMap() {
   const { total, bombCount } = normalizeConfig();
   const positions = getRandomPositions(total);
   const realTotal = positions.length;
-  const realBombCount = Math.min(bombCount, Math.max(1, realTotal - 1));
-  const shuffledNumbers = createShuffledNumbers(realTotal);
-  pickRoles(realTotal, realBombCount);
+  const realBomb = Math.min(bombCount, Math.max(1, realTotal - 1));
+  const numbers = createShuffledNumbers(realTotal);
+
+  pickRoles(realTotal, realBomb);
   hostArenaWidth = Math.max(1, arena.clientWidth);
   hostArenaHeight = Math.max(1, arena.clientHeight);
   clearArenaButtons();
   cells = [];
+
   for (let i = 0; i < realTotal; i += 1) {
     const btn = document.createElement("button");
     btn.className = "tile";
@@ -394,14 +371,13 @@ function randomizeMap() {
     let role = "safe";
     if (treasureSet.has(i)) role = "treasure";
     else if (bombSet.has(i)) role = "bomb";
-    setupHiddenTile(btn, shuffledNumbers[i], role);
+    setupHiddenTile(btn, numbers[i], role);
     btn.addEventListener("click", () => handleTileClick(btn));
     cells.push(btn);
     arena.appendChild(btn);
   }
-  pickNextTargetNumber();
   updateHud();
-  messageText.textContent = `So muc tieu hien tai: ${currentTargetNumber}.`;
+  messageText.textContent = "Bat dau! Click tu do de mo o.";
 }
 
 function startGame(resetPoint = false) {
@@ -410,9 +386,10 @@ function startGame(resetPoint = false) {
     return;
   }
   if (resetPoint) {
-    Object.keys(playerStats).forEach((id) => {
-      playerStats[id].score = 0;
-      playerStats[id].treasure = 0;
+    Object.values(playerStats).forEach((p) => {
+      p.score = 0;
+      p.treasure = 0;
+      p.bombHit = 0;
     });
   }
   gameActive = true;
@@ -420,7 +397,7 @@ function startGame(resetPoint = false) {
   applyRandomBackground();
   syncTileSizeForScreen();
   randomizeMap();
-  if (isRoomHost) broadcastFullState();
+  broadcastFullState();
 }
 
 function connectMultiplayer() {
@@ -433,10 +410,12 @@ function connectMultiplayer() {
   myPlayerName = playerName;
   mpStatusText.textContent = "Dang ket noi...";
   if (mpSocket) mpSocket.close();
+
   mpSocket = new WebSocket(WS_SERVER_URL);
   mpSocket.addEventListener("open", () => {
     mpSocket.send(JSON.stringify({ type: "join", roomId, playerName }));
   });
+
   mpSocket.addEventListener("message", (ev) => {
     let msg;
     try {
@@ -444,9 +423,10 @@ function connectMultiplayer() {
     } catch {
       return;
     }
+
     if (msg.type === "joined") {
-      mpRoomId = msg.roomId;
       mpClientId = msg.clientId;
+      mpRoomId = msg.roomId;
       isRoomHost = Boolean(msg.isHost);
       Object.keys(playerStats).forEach((k) => delete playerStats[k]);
       (msg.peers || []).forEach((p) => ensurePlayer(p.id, p.name));
@@ -454,31 +434,35 @@ function connectMultiplayer() {
       stepConnect.classList.add("section-hidden");
       stepGame.classList.remove("section-hidden");
       applyHostPermissions();
+      updateHud();
       mpStatusText.textContent = isRoomHost ? `Host · ${mpRoomId}` : `Khach · ${mpRoomId}`;
       messageText.textContent = isRoomHost
-        ? "Ban la chu phong. Co the Start game va dat so nut."
-        : "Da vao phong. Doi chu phong Start.";
-      updateHud();
+        ? "Ban la chu phong. Cau hinh va bam Start game."
+        : "Dang doi chu phong start game...";
       if (!isRoomHost) sendRoomMsg({ kind: "need_state" }, { toHostOnly: true });
       return;
     }
+
     if (msg.type === "peer_joined" && msg.player) {
       ensurePlayer(msg.player.id, msg.player.name);
       updateHud();
       if (isRoomHost) broadcastFullState();
       return;
     }
+
     if (msg.type === "peer_left" && msg.playerId) {
       removePlayer(msg.playerId);
       updateHud();
       return;
     }
+
     if (msg.type === "promoted_host") {
       isRoomHost = true;
       applyHostPermissions();
-      messageText.textContent = "Host cu roi phong. Ban la host moi.";
+      messageText.textContent = "Ban la host moi. Co the Start game.";
       return;
     }
+
     if (msg.type === "room_msg" && msg.data) {
       const data = msg.data;
       if (data.kind === "full_state") {
@@ -486,15 +470,14 @@ function connectMultiplayer() {
       } else if (data.kind === "need_state" && isRoomHost) {
         broadcastFullState();
       } else if (data.kind === "guest_click" && isRoomHost) {
-        const targetBtn = cells.find(
-          (b) => Number(b.dataset.order) === Number(data.order) && b.dataset.revealed !== "true"
+        const btn = cells.find(
+          (x) => Number(x.dataset.order) === Number(data.order) && x.dataset.revealed !== "true"
         );
-        if (targetBtn) handleTileClick(targetBtn, msg.from);
-      } else if (data.kind === "lobby") {
-        messageText.textContent = "Da vao phong. Doi chu phong Start.";
+        if (btn) handleTileClick(btn, msg.from);
       }
     }
   });
+
   mpSocket.addEventListener("close", () => {
     mpStatusText.textContent = "Offline";
   });
