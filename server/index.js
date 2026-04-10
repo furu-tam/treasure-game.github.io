@@ -77,6 +77,13 @@ wss.on("connection", (ws) => {
         },
         ws
       );
+
+      const roster = [...room.values()].map((p) => ({ id: p.id, name: p.name }));
+      broadcastToRoomAll(roomId, {
+        type: "room_roster",
+        roomId,
+        peers: roster
+      });
       return;
     }
 

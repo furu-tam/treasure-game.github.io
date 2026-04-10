@@ -65,16 +65,26 @@ function removePlayer(id) {
   delete playerStats[id];
 }
 
+function mergePeersRoster(peers) {
+  (peers || []).forEach((p) => {
+    if (p && p.id) ensurePlayer(p.id, p.name || "Player");
+  });
+}
+
 function myStat() {
   return playerStats[mpClientId] || { score: 0, treasure: 0, bombHit: 0 };
 }
 
 function renderLeaderboard() {
-  const rows = Object.entries(playerStats)
-    .sort((a, b) => b[1].score - a[1].score)
-    .map(([id, p]) => {
+  const sorted = Object.entries(playerStats).sort((a, b) => {
+    if (b[1].score !== a[1].score) return b[1].score - a[1].score;
+    return String(a[1].name || "").localeCompare(String(b[1].name || ""));
+  });
+  const rows = sorted
+    .map(([id, p], idx) => {
+      const rank = idx + 1;
       const me = id === mpClientId ? " (ban)" : "";
-      return `<div class="leaderboard-item"><span>${p.name}${me}</span><strong>${p.score} | 💎 ${p.treasure} | 💣 ${p.bombHit}</strong></div>`;
+      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | 💣${p.bombHit}</strong></div>`;
     })
     .join("");
   leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
@@ -429,7 +439,7 @@ function connectMultiplayer() {
       mpRoomId = msg.roomId;
       isRoomHost = Boolean(msg.isHost);
       Object.keys(playerStats).forEach((k) => delete playerStats[k]);
-      (msg.peers || []).forEach((p) => ensurePlayer(p.id, p.name));
+      mergePeersRoster(msg.peers);
       ensurePlayer(mpClientId, myPlayerName);
       stepConnect.classList.add("section-hidden");
       stepGame.classList.remove("section-hidden");
@@ -443,10 +453,17 @@ function connectMultiplayer() {
       return;
     }
 
+    if (msg.type === "room_roster" && Array.isArray(msg.peers)) {
+      mergePeersRoster(msg.peers);
+      ensurePlayer(mpClientId, myPlayerName);
+      updateHud();
+      if (isRoomHost) broadcastFullState();
+      return;
+    }
+
     if (msg.type === "peer_joined" && msg.player) {
       ensurePlayer(msg.player.id, msg.player.name);
       updateHud();
-      if (isRoomHost) broadcastFullState();
       return;
     }
 
