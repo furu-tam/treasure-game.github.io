@@ -371,18 +371,19 @@ function endGame() {
 function updatePlayerScore(playerId, role) {
   ensurePlayer(playerId, playerId === mpClientId ? myPlayerName : "Player");
   const p = playerStats[playerId];
+  if (role === "bomb") {
+    p.bombHit += 1;
+    const penalty = p.bombHit * 10;
+    p.score -= penalty;
+    return;
+  }
+  p.score += 1;
   if (role === "treasure") {
     p.score += 10;
     p.treasure += 1;
   } else if (role === "heart") {
     p.score += 50;
     p.heart = (p.heart || 0) + 1;
-  } else if (role === "bomb") {
-    p.bombHit += 1;
-    const penalty = p.bombHit * 10;
-    p.score -= penalty;
-  } else {
-    p.score = Math.max(0, p.score - 1);
   }
 }
 
@@ -415,11 +416,11 @@ function handleTileClick(btn, actorId = mpClientId) {
       const bombHits = playerStats[actorId]?.bombHit || 0;
       messageText.textContent = `Trung boom! Lan ${bombHits}: -${bombHits * 10} diem.`;
     } else if (role === "treasure") {
-      messageText.textContent = "Tim thay kho bau! +10 diem.";
+      messageText.textContent = "Tim thay kho bau! +1 (o dung) +10 = +11 diem.";
     } else if (role === "heart") {
-      messageText.textContent = "Tim thay tim! +50 diem.";
+      messageText.textContent = "Tim thay tim! +1 (o dung) +50 = +51 diem.";
     } else {
-      messageText.textContent = "O trong. -1 diem.";
+      messageText.textContent = "O trong. +1 diem (o dung).";
     }
 
     if (isRoomHost) broadcastFullState();
