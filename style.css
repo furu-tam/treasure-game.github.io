@@ -92,7 +92,7 @@ body.bg-landscape::after {
     linear-gradient(200deg, transparent 0 58%, rgba(22, 101, 52, 0.42) 58% 100%);
 }
 
-.hidden {
+.section-hidden {
   display: none !important;
 }
 

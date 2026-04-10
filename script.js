@@ -451,8 +451,8 @@ function connectMultiplayer() {
       Object.keys(playerStats).forEach((k) => delete playerStats[k]);
       (msg.peers || []).forEach((p) => ensurePlayer(p.id, p.name));
       ensurePlayer(mpClientId, myPlayerName);
-      stepConnect.classList.add("hidden");
-      stepGame.classList.remove("hidden");
+      stepConnect.classList.add("section-hidden");
+      stepGame.classList.remove("section-hidden");
       applyHostPermissions();
       mpStatusText.textContent = isRoomHost ? `Host · ${mpRoomId}` : `Khach · ${mpRoomId}`;
       messageText.textContent = isRoomHost
