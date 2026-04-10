@@ -17,6 +17,7 @@ const resetBtn = document.getElementById("resetBtn");
 
 const scoreText = document.getElementById("scoreText");
 const treasureText = document.getElementById("treasureText");
+const heartText = document.getElementById("heartText");
 const bombText = document.getElementById("bombText");
 const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
@@ -33,6 +34,7 @@ let gameActive = false;
 let cells = [];
 let bombSet = new Set();
 let treasureSet = new Set();
+let heartSet = new Set();
 let hostArenaWidth = 1;
 let hostArenaHeight = 1;
 let applyingRemoteState = false;
@@ -55,7 +57,7 @@ function randInt(min, max) {
 function ensurePlayer(id, name = "Player") {
   if (!id) return;
   if (!playerStats[id]) {
-    playerStats[id] = { name, score: 0, treasure: 0, bombHit: 0 };
+    playerStats[id] = { name, score: 0, treasure: 0, heart: 0, bombHit: 0 };
   } else if (name) {
     playerStats[id].name = name;
   }
@@ -72,7 +74,7 @@ function mergePeersRoster(peers) {
 }
 
 function myStat() {
-  return playerStats[mpClientId] || { score: 0, treasure: 0, bombHit: 0 };
+  return playerStats[mpClientId] || { score: 0, treasure: 0, heart: 0, bombHit: 0 };
 }
 
 function renderLeaderboard() {
@@ -84,7 +86,7 @@ function renderLeaderboard() {
     .map(([id, p], idx) => {
       const rank = idx + 1;
       const me = id === mpClientId ? " (ban)" : "";
-      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | 💣${p.bombHit}</strong></div>`;
+      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | ❤️${p.heart ?? 0} | 💣${p.bombHit}</strong></div>`;
     })
     .join("");
   leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
@@ -94,6 +96,7 @@ function updateHud() {
   const me = myStat();
   scoreText.textContent = String(me.score);
   treasureText.textContent = String(me.treasure);
+  heartText.textContent = String(me.heart ?? 0);
   bombText.textContent = String(me.bombHit);
   stateText.textContent = gameActive ? "Dang choi" : "Da dung";
   renderLeaderboard();
@@ -181,6 +184,19 @@ function pickRoles(total, bombCount) {
     if (!bombs.has(idx)) treasures.add(idx);
   }
   treasureSet = treasures;
+
+  const heartCandidates = [];
+  for (let i = 0; i < total; i += 1) {
+    if (!bombs.has(i) && !treasures.has(i)) heartCandidates.push(i);
+  }
+  const hearts = new Set();
+  if (heartCandidates.length > 0) {
+    const nHeart = randInt(1, Math.min(4, heartCandidates.length));
+    while (hearts.size < nHeart) {
+      hearts.add(heartCandidates[randInt(0, heartCandidates.length - 1)]);
+    }
+  }
+  heartSet = hearts;
 }
 
 function createShuffledNumbers(total) {
@@ -193,7 +209,7 @@ function createShuffledNumbers(total) {
 }
 
 function setupHiddenTile(btn, order, role) {
-  btn.classList.remove("safe", "treasure", "bomb");
+  btn.classList.remove("safe", "treasure", "bomb", "heart", "vanished", "vanish");
   btn.classList.add("hidden");
   btn.dataset.revealed = "false";
   btn.dataset.role = role;
@@ -201,17 +217,52 @@ function setupHiddenTile(btn, order, role) {
   btn.textContent = String(order);
 }
 
-function revealTile(btn, role) {
-  btn.classList.remove("hidden", "safe", "treasure", "bomb");
+function applyVanishedSafe(btn) {
+  btn.classList.remove("safe", "vanish");
+  btn.classList.add("vanished");
+  btn.textContent = "";
+}
+
+function revealTile(btn, role, opts = {}) {
+  const { instant = false, onDone } = opts;
+  btn.classList.remove("hidden", "safe", "treasure", "bomb", "heart", "vanished", "vanish");
   if (role === "treasure") {
     btn.classList.add("treasure");
     btn.textContent = "💎";
+    if (onDone) onDone();
   } else if (role === "bomb") {
     btn.classList.add("bomb");
     btn.textContent = "💣";
+    if (onDone) onDone();
+  } else if (role === "heart") {
+    btn.classList.add("heart");
+    btn.textContent = "❤️";
+    if (onDone) onDone();
   } else {
     btn.classList.add("safe");
-    btn.textContent = "OK";
+    if (instant) {
+      applyVanishedSafe(btn);
+      if (onDone) onDone();
+    } else {
+      btn.textContent = "";
+      btn.classList.add("vanish");
+      let finished = false;
+      let safetyId = 0;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(safetyId);
+        btn.removeEventListener("animationend", done);
+        applyVanishedSafe(btn);
+        if (onDone) onDone();
+      };
+      const done = (ev) => {
+        if (ev.animationName !== "tileVanish") return;
+        finish();
+      };
+      btn.addEventListener("animationend", done);
+      safetyId = setTimeout(finish, 750);
+    }
   }
 }
 
@@ -260,7 +311,13 @@ function applyFullState(payload) {
 
     Object.keys(playerStats).forEach((k) => delete playerStats[k]);
     Object.entries(payload.playerStats || {}).forEach(([k, v]) => {
-      playerStats[k] = { name: v.name, score: v.score, treasure: v.treasure, bombHit: v.bombHit || 0 };
+      playerStats[k] = {
+        name: v.name,
+        score: v.score,
+        treasure: v.treasure,
+        heart: v.heart ?? 0,
+        bombHit: v.bombHit || 0
+      };
     });
     ensurePlayer(mpClientId, myPlayerName);
 
@@ -283,7 +340,11 @@ function applyFullState(payload) {
         btn.dataset.revealed = "true";
         btn.dataset.role = t.role;
         btn.dataset.order = String(t.order);
-        revealTile(btn, t.role);
+        if (t.role === "safe") {
+          revealTile(btn, "safe", { instant: true });
+        } else {
+          revealTile(btn, t.role);
+        }
       } else {
         setupHiddenTile(btn, t.order, t.role);
       }
@@ -313,6 +374,9 @@ function updatePlayerScore(playerId, role) {
   if (role === "treasure") {
     p.score += 10;
     p.treasure += 1;
+  } else if (role === "heart") {
+    p.score += 50;
+    p.heart = (p.heart || 0) + 1;
   } else if (role === "bomb") {
     p.bombHit += 1;
     const penalty = p.bombHit * 10;
@@ -337,25 +401,31 @@ function handleTileClick(btn, actorId = mpClientId) {
 
   const role = btn.dataset.role;
   btn.dataset.revealed = "true";
-  revealTile(btn, role);
-  updatePlayerScore(actorId, role);
-  updateHud();
 
-  if (!hasAnyHiddenTile()) {
-    endGame();
-    return;
-  }
+  const afterScoreAndMessage = () => {
+    updatePlayerScore(actorId, role);
+    updateHud();
 
-  if (role === "bomb") {
-    const bombHits = playerStats[actorId]?.bombHit || 0;
-    messageText.textContent = `Trung boom! Lan ${bombHits}: -${bombHits * 10} diem.`;
-  } else if (role === "treasure") {
-    messageText.textContent = "Tim thay kho bau! +10 diem.";
-  } else {
-    messageText.textContent = "O trong. -1 diem.";
-  }
+    if (!hasAnyHiddenTile()) {
+      endGame();
+      return;
+    }
 
-  if (isRoomHost) broadcastFullState();
+    if (role === "bomb") {
+      const bombHits = playerStats[actorId]?.bombHit || 0;
+      messageText.textContent = `Trung boom! Lan ${bombHits}: -${bombHits * 10} diem.`;
+    } else if (role === "treasure") {
+      messageText.textContent = "Tim thay kho bau! +10 diem.";
+    } else if (role === "heart") {
+      messageText.textContent = "Tim thay tim! +50 diem.";
+    } else {
+      messageText.textContent = "O trong. -1 diem.";
+    }
+
+    if (isRoomHost) broadcastFullState();
+  };
+
+  revealTile(btn, role, { onDone: afterScoreAndMessage });
 }
 
 function randomizeMap() {
@@ -380,6 +450,7 @@ function randomizeMap() {
     btn.style.top = `${positions[i].y}px`;
     let role = "safe";
     if (treasureSet.has(i)) role = "treasure";
+    else if (heartSet.has(i)) role = "heart";
     else if (bombSet.has(i)) role = "bomb";
     setupHiddenTile(btn, numbers[i], role);
     btn.addEventListener("click", () => handleTileClick(btn));
@@ -399,6 +470,7 @@ function startGame(resetPoint = false) {
     Object.values(playerStats).forEach((p) => {
       p.score = 0;
       p.treasure = 0;
+      p.heart = 0;
       p.bombHit = 0;
     });
   }

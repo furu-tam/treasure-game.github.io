@@ -347,6 +347,21 @@ input {
   color: #422006;
 }
 
+.tile.heart {
+  background: linear-gradient(145deg, #fda4af, #be123c);
+  color: #fff1f2;
+  font-size: 28px;
+}
+
+.tile.vanished {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  border-color: transparent;
+  transform: scale(0.15);
+  transition: none;
+}
+
 .tile.bomb {
   background: linear-gradient(145deg, #f87171, #991b1b);
   color: #fff1f2;
