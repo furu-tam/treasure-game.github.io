@@ -7,7 +7,24 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <section class="topbar">
+  <section class="step-card" id="stepConnect">
+    <h2>Step 1: Cau hinh WebSocket</h2>
+    <div class="controls">
+      <label>
+        Ten nguoi choi
+        <input id="playerNameInput" type="text" maxlength="24" placeholder="Tam" />
+      </label>
+      <label>
+        Phong
+        <input id="roomIdInput" type="text" maxlength="64" placeholder="room-1" style="width: 140px" />
+      </label>
+      <button class="btn btn-start" type="button" id="mpConnectBtn">Ket noi phong</button>
+      <span class="pill mp-status" id="mpStatusText">Offline</span>
+    </div>
+  </section>
+
+  <section class="game-step hidden" id="stepGame">
+    <section class="topbar">
     <div class="controls">
       <label>
         So nut (N)
@@ -19,20 +36,6 @@
       </label>
       <button class="btn btn-start" id="startBtn">Start / Restart</button>
       <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
-      <label class="mp-toggle">
-        <input id="mpEnabledInput" type="checkbox" />
-        Multiplayer (WebSocket)
-      </label>
-      <label>
-        WS URL
-        <input id="wsUrlInput" type="text" placeholder="ws://localhost:8080" style="width: 200px" />
-      </label>
-      <label>
-        Phong
-        <input id="roomIdInput" type="text" maxlength="64" placeholder="room-1" style="width: 120px" />
-      </label>
-      <button class="btn btn-reset" type="button" id="mpConnectBtn">Ket noi phong</button>
-      <span class="pill mp-status" id="mpStatusText">Offline</span>
     </div>
     <div class="stats">
       <span class="pill">Diem: <strong id="scoreText">0</strong></span>
@@ -40,21 +43,23 @@
       <span class="pill target-pill">So muc tieu: <strong id="targetText">-</strong></span>
       <span class="pill">Trang thai: <strong id="stateText">Chua bat dau</strong></span>
     </div>
-  </section>
+    </section>
 
-  <div class="message" id="messageText">
-    Chon N va X, sau do bam Start de choi.
-  </div>
-
-  <main class="arena" id="arena">
-    <div class="overlay" id="overlay">
-      <div class="card">
-        <h2 id="resultTitle">Game Over</h2>
-        <p id="resultText"></p>
-        <button class="btn btn-start" id="playAgainBtn">Choi Lai</button>
-      </div>
+    <div class="message" id="messageText">
+      Ket noi thanh cong. Chi host moi duoc Start.
     </div>
-  </main>
+
+    <main class="arena" id="arena">
+      <div class="leaderboard" id="leaderboard"></div>
+      <div class="overlay" id="overlay">
+        <div class="card">
+          <h2 id="resultTitle">Game Over</h2>
+          <p id="resultText"></p>
+          <button class="btn btn-start" id="playAgainBtn">Choi Lai</button>
+        </div>
+      </div>
+    </main>
+  </section>
 
   <script src="script.js"></script>
 </body>

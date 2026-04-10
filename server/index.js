@@ -10,16 +10,11 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-/** @type {Map<string, Map<import('ws'), { id: string }>>} */
+/** @type {Map<string, Map<import('ws'), { id: string, name: string }>>} */
 const rooms = new Map();
 
 function randomId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function roomPeerCount(roomId) {
-  const room = rooms.get(roomId);
-  return room ? room.size : 0;
 }
 
 function broadcastToRoom(roomId, payload, excludeWs = null) {
@@ -50,13 +45,16 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "join" && typeof msg.roomId === "string" && msg.roomId.trim()) {
+      const playerNameRaw = typeof msg.playerName === "string" ? msg.playerName : "Player";
+      const playerName = playerNameRaw.trim().slice(0, 24) || "Player";
       roomId = msg.roomId.trim().slice(0, 64);
       if (!rooms.has(roomId)) {
         rooms.set(roomId, new Map());
       }
       const room = rooms.get(roomId);
       const isHost = room.size === 0;
-      room.set(ws, { id: clientId });
+      room.set(ws, { id: clientId, name: playerName });
+      const peers = [...room.values()].map((p) => ({ id: p.id, name: p.name }));
 
       ws.send(
         JSON.stringify({
@@ -64,11 +62,21 @@ wss.on("connection", (ws) => {
           roomId,
           clientId,
           isHost,
-          peerCount: room.size
+          peerCount: room.size,
+          peers
         })
       );
 
-      broadcastToRoom(roomId, { type: "peer_joined", roomId, peerCount: room.size }, ws);
+      broadcastToRoom(
+        roomId,
+        {
+          type: "peer_joined",
+          roomId,
+          peerCount: room.size,
+          player: { id: clientId, name: playerName }
+        },
+        ws
+      );
       return;
     }
 
@@ -103,12 +111,18 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     if (!roomId || !rooms.has(roomId)) return;
     const room = rooms.get(roomId);
+    const left = room.get(ws);
     room.delete(ws);
     const count = room.size;
     if (count === 0) {
       rooms.delete(roomId);
     } else {
-      broadcastToRoomAll(roomId, { type: "peer_left", roomId, peerCount: count });
+      broadcastToRoomAll(roomId, {
+        type: "peer_left",
+        roomId,
+        peerCount: count,
+        playerId: left ? left.id : null
+      });
       const newHost = [...room.keys()][0];
       if (newHost && newHost.readyState === 1) {
         newHost.send(JSON.stringify({ type: "promoted_host", roomId }));

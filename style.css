@@ -92,6 +92,28 @@ body.bg-landscape::after {
     linear-gradient(200deg, transparent 0 58%, rgba(22, 101, 52, 0.42) 58% 100%);
 }
 
+.hidden {
+  display: none !important;
+}
+
+.step-card {
+  background: rgba(17, 24, 39, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.step-card h2 {
+  font-size: 18px;
+}
+
+.game-step {
+  display: grid;
+  gap: 12px;
+}
+
 .topbar {
   display: flex;
   flex-wrap: wrap;
@@ -210,6 +232,38 @@ input {
   overflow: hidden;
 }
 
+.leaderboard {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  min-width: 210px;
+  max-width: 270px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  backdrop-filter: blur(4px);
+}
+
+.leaderboard h3 {
+  font-size: 13px;
+  color: #93c5fd;
+}
+
+.leaderboard-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.leaderboard-item strong {
+  color: #facc15;
+}
+
 .tile {
   position: absolute;
   width: var(--btn-size);
@@ -233,8 +287,46 @@ input {
 .tile.hidden {
   background: linear-gradient(145deg, #64748b, #334155);
   color: #f1f5f9;
-  font-size: 14px;
+  font-size: 12px;
   letter-spacing: 0.2px;
+  line-height: 1;
+  animation: bubbleFloat 2.4s ease-in-out infinite;
+}
+
+.bubble-icon {
+  font-size: 26px;
+  margin-top: 4px;
+  animation: bubbleShimmer 2.1s ease-in-out infinite;
+}
+
+.bubble-number {
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: -2px;
+}
+
+@keyframes bubbleFloat {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.03);
+  }
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+}
+
+@keyframes bubbleShimmer {
+  0%,
+  100% {
+    opacity: 0.88;
+    filter: drop-shadow(0 0 0 rgba(186, 230, 253, 0));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(186, 230, 253, 0.55));
+  }
 }
 
 .tile.safe {
