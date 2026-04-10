@@ -23,11 +23,11 @@ const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
 
 const playerNameInput = document.getElementById("playerNameInput");
-const roomIdInput = document.getElementById("roomIdInput");
 const mpConnectBtn = document.getElementById("mpConnectBtn");
 const mpStatusText = document.getElementById("mpStatusText");
 
 const WS_SERVER_URL = "wss://treasure-game-github-io.onrender.com";
+const FIXED_ROOM_ID = "main";
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 
 let gameActive = false;
@@ -488,7 +488,7 @@ function connectMultiplayer() {
     messageText.textContent = "Hay nhap ten nguoi choi.";
     return;
   }
-  const roomId = (roomIdInput.value || "").trim() || "room-1";
+  const roomId = FIXED_ROOM_ID;
   myPlayerName = playerName;
   mpStatusText.textContent = "Dang ket noi...";
   if (mpSocket) mpSocket.close();
