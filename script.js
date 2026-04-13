@@ -1269,6 +1269,70 @@ function chickenWorldToScreen(x, y) {
   };
 }
 
+/** Sprite ga (nhin phai); P2 lat bang scale(-1,1). */
+function chickenDrawPlayerSprite(ctx, playerId, sx, sy) {
+  const p1 = playerId === 1;
+  const body = p1 ? "#facc15" : "#fb7185";
+  const bodyDeep = p1 ? "#eab308" : "#f43f5e";
+  const head = p1 ? "#fde047" : "#fda4af";
+  const comb = "#dc2626";
+  const beak = "#ea580c";
+  const eye = "#111827";
+  const leg = "#b45309";
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.scale(playerId === 1 ? 1 : -1, 1);
+
+  ctx.fillStyle = leg;
+  ctx.fillRect(-5, 12, 3, 7);
+  ctx.fillRect(4, 12, 3, 7);
+
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 2, 17, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = bodyDeep;
+  ctx.beginPath();
+  ctx.ellipse(-7, 4, 8, 7, -0.35, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = head;
+  ctx.beginPath();
+  ctx.arc(13, -9, 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = comb;
+  ctx.beginPath();
+  ctx.moveTo(7, -16);
+  ctx.quadraticCurveTo(9, -22, 11, -17);
+  ctx.quadraticCurveTo(13, -23, 15, -17);
+  ctx.quadraticCurveTo(17, -22, 19, -15);
+  ctx.lineTo(11, -14);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = beak;
+  ctx.beginPath();
+  ctx.moveTo(21, -8);
+  ctx.lineTo(29, -6);
+  ctx.lineTo(21, -4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = eye;
+  ctx.beginPath();
+  ctx.arc(17, -11, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#f9fafb";
+  ctx.beginPath();
+  ctx.arc(17.6, -11.6, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function chickenDraw() {
   if (!chickenCanvas) return;
   const ctx = chickenCanvas.getContext("2d");
@@ -1296,14 +1360,7 @@ function chickenDraw() {
 
   chickenState.players.forEach((p) => {
     const s = chickenWorldToScreen(p.x, p.y);
-    ctx.fillStyle = p.id === 1 ? "#facc15" : "#fb7185";
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#111827";
-    ctx.font = "bold 14px Segoe UI";
-    ctx.textAlign = "center";
-    ctx.fillText(`P${p.id}`, s.x, s.y + 5);
+    chickenDrawPlayerSprite(ctx, p.id, s.x, s.y);
   });
 
   const shooter = chickenCurrentPlayer();

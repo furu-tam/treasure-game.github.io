@@ -775,6 +775,19 @@ button.menu-card p {
   margin-bottom: 4px;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.bar-name-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-chicken {
+  flex-shrink: 0;
+  display: block;
 }
 
 .bar {
