@@ -696,6 +696,57 @@ function getAlphabetVisibleCount() {
   return 26;
 }
 
+function computeBestMiniCols(n, W, H, gap) {
+  let bestCols = 1;
+  let bestSide = 0;
+  for (let c = 1; c <= n; c += 1) {
+    const r = Math.ceil(n / c);
+    const cellW = (W - gap * (c - 1)) / c;
+    const cellH = (H - gap * (r - 1)) / r;
+    const side = Math.min(cellW, cellH);
+    if (side > bestSide) {
+      bestSide = side;
+      bestCols = c;
+    }
+  }
+  return { cols: bestCols, rows: Math.ceil(n / bestCols) };
+}
+
+function layoutMiniStage(stageEl, n) {
+  if (!stageEl || !n) return;
+  const cr = stageEl.getBoundingClientRect();
+  const W = Math.max(80, cr.width);
+  const H = Math.max(80, cr.height);
+  const gap = Math.round(Math.max(5, Math.min(18, Math.min(W, H) * 0.018)));
+  const { cols, rows } = computeBestMiniCols(n, W, H, gap);
+  stageEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+  stageEl.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+  stageEl.style.gap = `${gap}px`;
+  const cellW = (W - gap * (cols - 1)) / cols;
+  const cellH = (H - gap * (rows - 1)) / rows;
+  const side = Math.min(cellW, cellH);
+  const fs = Math.max(14, Math.min(80, side * 0.45));
+  stageEl.style.setProperty("--mini-tile-fs", `${Math.round(fs)}px`);
+}
+
+let miniViewLayoutObserver = null;
+
+function ensureMiniViewLayoutObserver() {
+  const view = document.getElementById("viewMini");
+  if (!view || miniViewLayoutObserver) return;
+  let t = 0;
+  miniViewLayoutObserver = new ResizeObserver(() => {
+    clearTimeout(t);
+    t = window.setTimeout(() => {
+      if (view.classList.contains("section-hidden")) return;
+      const stage = document.getElementById("letterTiles");
+      const count = stage?.children?.length;
+      if (stage && count && stage.dataset.inited === "1") layoutMiniStage(stage, count);
+    }, 48);
+  });
+  miniViewLayoutObserver.observe(view);
+}
+
 function miniItemSpeakText(item) {
   if (item.speak && String(item.speak).trim()) return String(item.speak).trim();
   if (item.icon && !item.label) return "Con cá";
@@ -872,6 +923,11 @@ async function initMiniGameDemo() {
       letterTilesEl.appendChild(btn);
     }
     letterTilesEl.dataset.inited = "1";
+    ensureMiniViewLayoutObserver();
+    const nTiles = items.length;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => layoutMiniStage(letterTilesEl, nTiles));
+    });
   } catch (err) {
     miniGameTeardown();
     console.error(err);
