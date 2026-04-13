@@ -1127,27 +1127,315 @@ function initSnakeBindings() {
   drawSnakeBoard();
 }
 
+const chickenCanvas = document.getElementById("chickenCanvas");
+const chickenStartBtn = document.getElementById("chickenStartBtn");
+const chickenFireBtn = document.getElementById("chickenFireBtn");
+const chickenAngleInput = document.getElementById("chickenAngleInput");
+const chickenAngleText = document.getElementById("chickenAngleText");
+const chickenTurnText = document.getElementById("chickenTurnText");
+const chickenHp1Text = document.getElementById("chickenHp1Text");
+const chickenHp2Text = document.getElementById("chickenHp2Text");
+const chickenEnergy1Text = document.getElementById("chickenEnergy1Text");
+const chickenEnergy2Text = document.getElementById("chickenEnergy2Text");
+const chickenHp1Bar = document.getElementById("chickenHp1Bar");
+const chickenHp2Bar = document.getElementById("chickenHp2Bar");
+const chickenEnergy1Bar = document.getElementById("chickenEnergy1Bar");
+const chickenEnergy2Bar = document.getElementById("chickenEnergy2Bar");
+
+const chickenState = {
+  active: false,
+  worldW: 1000,
+  worldH: 600,
+  gravity: 900,
+  wind: 0,
+  projectile: null,
+  players: [],
+  turnIdx: 0,
+  animId: 0
+};
+
+function chickenCurrentPlayer() {
+  return chickenState.players[chickenState.turnIdx] || null;
+}
+
+function chickenOtherPlayer() {
+  return chickenState.players[(chickenState.turnIdx + 1) % 2] || null;
+}
+
+function chickenResizeCanvas() {
+  if (!chickenCanvas) return;
+  const box = chickenCanvas.getBoundingClientRect();
+  chickenCanvas.width = Math.max(640, Math.round(box.width));
+  chickenCanvas.height = Math.max(360, Math.round(chickenCanvas.width * 9 / 16));
+}
+
+function chickenSpawnPlayers() {
+  const floorY = chickenState.worldH - 48;
+  const p1x = randInt(120, 320);
+  const p2x = randInt(680, 880);
+  chickenState.players = [
+    { id: 1, x: p1x, y: floorY, hp: 100, energy: 0, angle: 45 },
+    { id: 2, x: p2x, y: floorY, hp: 100, energy: 0, angle: 45 }
+  ];
+  chickenState.turnIdx = randInt(0, 1);
+  chickenState.projectile = null;
+  chickenState.wind = randInt(-120, 120);
+}
+
+function chickenUiUpdate() {
+  const p1 = chickenState.players[0];
+  const p2 = chickenState.players[1];
+  if (!p1 || !p2) return;
+  if (chickenHp1Text) chickenHp1Text.textContent = String(Math.max(0, Math.round(p1.hp)));
+  if (chickenHp2Text) chickenHp2Text.textContent = String(Math.max(0, Math.round(p2.hp)));
+  if (chickenEnergy1Text) chickenEnergy1Text.textContent = String(p1.energy);
+  if (chickenEnergy2Text) chickenEnergy2Text.textContent = String(p2.energy);
+  if (chickenHp1Bar) chickenHp1Bar.style.width = `${Math.max(0, p1.hp)}%`;
+  if (chickenHp2Bar) chickenHp2Bar.style.width = `${Math.max(0, p2.hp)}%`;
+  if (chickenEnergy1Bar) chickenEnergy1Bar.style.width = `${Math.max(0, p1.energy)}%`;
+  if (chickenEnergy2Bar) chickenEnergy2Bar.style.width = `${Math.max(0, p2.energy)}%`;
+  if (chickenTurnText) chickenTurnText.textContent = chickenCurrentPlayer() ? `P${chickenCurrentPlayer().id}` : "-";
+  if (chickenAngleText && chickenAngleInput) chickenAngleText.textContent = `${chickenAngleInput.value}°`;
+}
+
+function chickenWorldToScreen(x, y) {
+  if (!chickenCanvas) return { x, y };
+  return {
+    x: x / chickenState.worldW * chickenCanvas.width,
+    y: y / chickenState.worldH * chickenCanvas.height
+  };
+}
+
+function chickenDraw() {
+  if (!chickenCanvas) return;
+  const ctx = chickenCanvas.getContext("2d");
+  if (!ctx) return;
+  const W = chickenCanvas.width;
+  const H = chickenCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, "#1d4ed8");
+  grd.addColorStop(1, "#065f46");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+
+  const floorY = chickenWorldToScreen(0, chickenState.worldH - 40).y;
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(0, floorY, W, H - floorY);
+
+  chickenState.players.forEach((p) => {
+    const s = chickenWorldToScreen(p.x, p.y);
+    ctx.fillStyle = p.id === 1 ? "#facc15" : "#fb7185";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 14px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText(`P${p.id}`, s.x, s.y + 5);
+  });
+
+  const shooter = chickenCurrentPlayer();
+  if (shooter && !chickenState.projectile) {
+    const s = chickenWorldToScreen(shooter.x, shooter.y);
+    const a = (Number(chickenAngleInput?.value || 45) * Math.PI) / 180;
+    const dir = shooter.id === 1 ? 1 : -1;
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(s.x + Math.cos(a) * 50 * dir, s.y - Math.sin(a) * 50);
+    ctx.stroke();
+  }
+
+  if (chickenState.projectile) {
+    const p = chickenState.projectile;
+    const s = chickenWorldToScreen(p.x, p.y);
+    ctx.fillStyle = p.super ? "#f97316" : "#f8fafc";
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, p.radius / chickenState.worldW * W, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function chickenEndTurn() {
+  chickenState.projectile = null;
+  const current = chickenCurrentPlayer();
+  if (current) current.energy = Math.min(100, current.energy + 35);
+  chickenState.turnIdx = (chickenState.turnIdx + 1) % 2;
+  const next = chickenCurrentPlayer();
+  if (next && chickenAngleInput) chickenAngleInput.value = String(next.angle);
+  chickenUiUpdate();
+}
+
+function chickenExplode(x, y, radius, dmg) {
+  chickenState.players.forEach((pl) => {
+    const dx = pl.x - x;
+    const dy = pl.y - y;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= radius) {
+      const ratio = 1 - dist / radius;
+      pl.hp = Math.max(0, pl.hp - dmg * ratio);
+    }
+  });
+  chickenUiUpdate();
+  const dead = chickenState.players.find((p) => p.hp <= 0);
+  if (dead) {
+    chickenState.active = false;
+    chickenState.projectile = null;
+    setTimeout(() => window.alert(`P${dead.id} thua!`), 10);
+    return;
+  }
+  chickenEndTurn();
+}
+
+function chickenTick(ts) {
+  if (!chickenState.active) return;
+  const p = chickenState.projectile;
+  if (p) {
+    const dt = 1 / 60;
+    p.vx += chickenState.wind * dt * 0.08;
+    p.vy += chickenState.gravity * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    const groundY = chickenState.worldH - 40;
+    if (p.x < 0 || p.x > chickenState.worldW || p.y >= groundY || p.y < 0) {
+      chickenExplode(Math.max(0, Math.min(chickenState.worldW, p.x)), Math.min(groundY, Math.max(0, p.y)), p.blast, p.damage);
+    }
+  }
+  chickenDraw();
+  chickenState.animId = window.requestAnimationFrame(chickenTick);
+}
+
+function chickenShoot() {
+  if (!chickenState.active || chickenState.projectile) return;
+  const shooter = chickenCurrentPlayer();
+  if (!shooter) return;
+  const angle = Math.max(10, Math.min(80, Number(chickenAngleInput?.value || shooter.angle)));
+  shooter.angle = angle;
+  const a = (angle * Math.PI) / 180;
+  const dir = shooter.id === 1 ? 1 : -1;
+  const superShot = shooter.energy >= 100;
+  if (superShot) shooter.energy = 0;
+  const power = superShot ? 760 : 620;
+  const radius = superShot ? 20 : 4;
+  const blast = superShot ? 150 : 60;
+  const damage = superShot ? 65 : 30;
+  chickenState.projectile = {
+    x: shooter.x + dir * 20,
+    y: shooter.y - 20,
+    vx: Math.cos(a) * power * dir,
+    vy: -Math.sin(a) * power,
+    radius,
+    blast,
+    damage,
+    super: superShot
+  };
+  chickenUiUpdate();
+}
+
+function chickenTapShoot() {
+  const view = document.getElementById("viewChicken");
+  if (!view || view.classList.contains("section-hidden")) return;
+  chickenShoot();
+}
+
+function chickenStartGame() {
+  chickenResizeCanvas();
+  chickenSpawnPlayers();
+  chickenState.active = true;
+  const p = chickenCurrentPlayer();
+  if (p && chickenAngleInput) chickenAngleInput.value = String(p.angle);
+  chickenUiUpdate();
+  if (chickenState.animId) cancelAnimationFrame(chickenState.animId);
+  chickenState.animId = window.requestAnimationFrame(chickenTick);
+}
+
+function chickenStopGame() {
+  chickenState.active = false;
+  chickenState.projectile = null;
+  if (chickenState.animId) {
+    cancelAnimationFrame(chickenState.animId);
+    chickenState.animId = 0;
+  }
+  chickenDraw();
+}
+
+function initChickenBindings() {
+  if (chickenStartBtn) chickenStartBtn.addEventListener("click", chickenStartGame);
+  if (chickenFireBtn) chickenFireBtn.addEventListener("click", chickenShoot);
+  if (chickenAngleInput) {
+    chickenAngleInput.addEventListener("input", () => {
+      chickenUiUpdate();
+      chickenDraw();
+    });
+  }
+  if (chickenCanvas) {
+    chickenCanvas.addEventListener("click", chickenTapShoot);
+  }
+  window.addEventListener("keydown", (ev) => {
+    const chickenView = document.getElementById("viewChicken");
+    if (!chickenView || chickenView.classList.contains("section-hidden")) return;
+    if (ev.code === "Space") {
+      ev.preventDefault();
+      chickenShoot();
+    }
+    if (ev.key === "ArrowUp" && chickenAngleInput) {
+      ev.preventDefault();
+      chickenAngleInput.value = String(Math.min(80, Number(chickenAngleInput.value) + 2));
+      chickenUiUpdate();
+      chickenDraw();
+    }
+    if (ev.key === "ArrowDown" && chickenAngleInput) {
+      ev.preventDefault();
+      chickenAngleInput.value = String(Math.max(10, Number(chickenAngleInput.value) - 2));
+      chickenUiUpdate();
+      chickenDraw();
+    }
+  });
+  window.addEventListener("resize", () => {
+    const chickenView = document.getElementById("viewChicken");
+    if (!chickenView || chickenView.classList.contains("section-hidden")) return;
+    chickenResizeCanvas();
+    chickenDraw();
+  });
+  chickenResizeCanvas();
+  chickenSpawnPlayers();
+  chickenUiUpdate();
+  chickenDraw();
+}
+
 function setupAppNavigation() {
   const viewMenu = document.getElementById("viewMenu");
   const viewTreasure = document.getElementById("viewTreasure");
   const viewMini = document.getElementById("viewMini");
   const viewSnake = document.getElementById("viewSnake");
-  if (!viewMenu || !viewTreasure || !viewMini || !viewSnake) return;
+  const viewChicken = document.getElementById("viewChicken");
+  if (!viewMenu || !viewTreasure || !viewMini || !viewSnake || !viewChicken) return;
 
   function showAppView(name) {
     viewMenu.classList.toggle("section-hidden", name !== "menu");
     viewTreasure.classList.toggle("section-hidden", name !== "treasure");
     viewMini.classList.toggle("section-hidden", name !== "mini");
     viewSnake.classList.toggle("section-hidden", name !== "snake");
+    viewChicken.classList.toggle("section-hidden", name !== "chicken");
     if (name === "mini") void initMiniGameDemo();
     if (name === "snake") resizeSnakeCanvas();
     else stopSnakeGame(false);
+    if (name === "chicken") {
+      chickenResizeCanvas();
+      chickenDraw();
+    } else {
+      chickenStopGame();
+    }
   }
 
   document.querySelectorAll("[data-app-view]").forEach((el) => {
     el.addEventListener("click", () => {
       const v = el.getAttribute("data-app-view");
-      if (v === "menu" || v === "treasure" || v === "mini" || v === "snake") showAppView(v);
+      if (v === "menu" || v === "treasure" || v === "mini" || v === "snake" || v === "chicken")
+        showAppView(v);
     });
   });
 }
@@ -1155,6 +1443,7 @@ function setupAppNavigation() {
 window.addEventListener("beforeunload", () => miniAudioDisposeAll());
 
 initSnakeBindings();
+initChickenBindings();
 setupAppNavigation();
 updateHud();
 applyRandomBackground();

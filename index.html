@@ -24,6 +24,11 @@
         <h2>Snake Game</h2>
         <p>Ran san moi, cham tuong la thua. An moi +1 va dai hon.</p>
       </button>
+      <button type="button" class="menu-card menu-card--chicken" data-app-view="chicken">
+        <span class="menu-card__icon" aria-hidden="true">🐔</span>
+        <h2>Choi Ga</h2>
+        <p>Turn-based ban dan, co HP va Energy, day nang luong thi ban super shot.</p>
+      </button>
       <button type="button" class="menu-card menu-card--treasure" data-app-view="treasure">
         <span class="menu-card__icon" aria-hidden="true">💎</span>
         <h2>Treasure Game</h2>
@@ -32,7 +37,7 @@
     </main>
 
     <footer class="menu-footer">
-      <span>3 game hien co</span>
+      <span>4 game hien co</span>
     </footer>
   </div>
 
@@ -123,6 +128,41 @@
         <button type="button" class="snake-btn" data-snake-dir="right">→</button>
       </div>
       <p class="snake-tip">PC: dung phim mui ten. Mobile: dung 4 nut dieu huong.</p>
+    </section>
+  </div>
+
+  <div id="viewChicken" class="app-view page-snake section-hidden">
+    <button type="button" class="nav-back" data-app-view="menu">← Trang chu</button>
+    <section class="snake-panel chicken-panel">
+      <div class="chicken-topbar">
+        <div class="pill">Luot: <strong id="chickenTurnText">P1</strong></div>
+        <button type="button" class="btn btn-start" id="chickenStartBtn">Start Choi Ga</button>
+      </div>
+      <div class="chicken-bars">
+        <div class="bar-card">
+          <div class="bar-name">P1 HP <strong id="chickenHp1Text">100</strong></div>
+          <div class="bar"><span id="chickenHp1Bar"></span></div>
+          <div class="bar-name">Energy <strong id="chickenEnergy1Text">0</strong></div>
+          <div class="bar bar-energy"><span id="chickenEnergy1Bar"></span></div>
+        </div>
+        <div class="bar-card">
+          <div class="bar-name">P2 HP <strong id="chickenHp2Text">100</strong></div>
+          <div class="bar"><span id="chickenHp2Bar"></span></div>
+          <div class="bar-name">Energy <strong id="chickenEnergy2Text">0</strong></div>
+          <div class="bar bar-energy"><span id="chickenEnergy2Bar"></span></div>
+        </div>
+      </div>
+      <div class="snake-board-wrap">
+        <canvas id="chickenCanvas" width="960" height="540" aria-label="Chicken battle board"></canvas>
+      </div>
+      <div class="chicken-controls">
+        <label class="pill">Goc ban:
+          <input id="chickenAngleInput" type="range" min="10" max="80" value="45" />
+          <strong id="chickenAngleText">45°</strong>
+        </label>
+        <button type="button" class="btn btn-start" id="chickenFireBtn">Ban (Space / Tap)</button>
+      </div>
+      <p class="snake-tip">Cham vao map hoac bam Space de ban. Moi nguoi 1 luot, cham tuong dat no gay sat thuong theo ban kinh.</p>
     </section>
   </div>
 

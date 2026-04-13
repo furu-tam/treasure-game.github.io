@@ -521,6 +521,10 @@ button.menu-card p {
   background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(22, 101, 52, 0.45));
 }
 
+.menu-card--chicken {
+  background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(180, 83, 9, 0.45));
+}
+
 .menu-card__icon {
   font-size: 2.25rem;
   line-height: 1;
@@ -738,5 +742,83 @@ button.menu-card p {
 @media (min-width: 900px) {
   .snake-controls {
     display: none;
+  }
+}
+
+.chicken-panel {
+  gap: 10px;
+}
+
+.chicken-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.chicken-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.bar-card {
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.bar-name {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  width: 100%;
+  transition: width 0.2s ease;
+}
+
+.bar-energy > span {
+  background: linear-gradient(90deg, #38bdf8, #0284c7);
+  width: 0%;
+}
+
+#chickenCanvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(180deg, #1e3a8a 0%, #065f46 100%);
+}
+
+.chicken-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+#chickenAngleInput {
+  width: 180px;
+}
+
+@media (max-width: 700px) {
+  .chicken-bars {
+    grid-template-columns: 1fr;
   }
 }
