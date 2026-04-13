@@ -1646,12 +1646,12 @@ function initChickenBindings() {
       chickenUiUpdate();
       chickenDraw();
     }
-    if (ev.key.toLowerCase() === "a") {
+    if (ev.key.toLowerCase() === "a" || ev.key === "ArrowLeft") {
       ev.preventDefault();
       if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_input", action: "move_left" }, { toHostOnly: true });
       else chickenMovePlayer(-20);
     }
-    if (ev.key.toLowerCase() === "d") {
+    if (ev.key.toLowerCase() === "d" || ev.key === "ArrowRight") {
       ev.preventDefault();
       if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_input", action: "move_right" }, { toHostOnly: true });
       else chickenMovePlayer(20);
