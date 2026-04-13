@@ -631,20 +631,94 @@ function buildSineWavBlob(freqHz, durationSec, sampleRate = 24000) {
 }
 
 const MINI_AUDIO_BASE = "assets/mini/";
-const MINI_MANIFEST_URL = `${MINI_AUDIO_BASE}audio-manifest.json`;
+const MINI_ALPHABET_BASE = "assets/alphabet-eng/";
 
-const MINI_DEFAULT_ITEMS = [
-  { label: "A", speak: "Á", freq: 440, dur: 0.28 },
-  { label: "B", speak: "Bê", freq: 494, dur: 0.28 },
-  { label: "C", speak: "Xê", freq: 523, dur: 0.28 },
-  { icon: "🐟", speak: "Con cá", freq: 660, dur: 0.38 }
+const MINI_ALPHABET_SPEAK_VI = [
+  "Ây",
+  "Bi",
+  "Xi",
+  "Đi",
+  "I",
+  "E-ph",
+  "Gi",
+  "E-i-chơ",
+  "Ai",
+  "Giê-i",
+  "Kê-i",
+  "E-Lơ",
+  "Em",
+  "En",
+  "Ôu",
+  "Pi",
+  "Ky-u",
+  "A-rơ",
+  "E-Xơ",
+  "Ti",
+  "Yu",
+  "Vi",
+  "Đa-bơn Du",
+  "I-Xơ",
+  "Uai",
+  "De-đơ"
 ];
+
+const ENGLISH_ALPHABET_26 = "abcdefghijklmnopqrstuvwxyz".split("").map((key, i) => ({
+  key,
+  label: key.toUpperCase(),
+  file: `${key}.mp3`,
+  speak: MINI_ALPHABET_SPEAK_VI[i],
+  freq: 200 + i * 15,
+  dur: 0.28
+}));
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getAlphabetVisibleCount() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const s = Math.min(w, h);
+  const L = Math.max(w, h);
+  if (s < 360) return 4;
+  if (s < 420) return 6;
+  if (s < 520) return 8;
+  if (s < 640) return w >= 400 ? 10 : 8;
+  if (s < 768) return 12;
+  if (L < 900) return 12;
+  if (L < 1024) return 16;
+  if (L < 1280) return 20;
+  return 26;
+}
 
 function miniItemSpeakText(item) {
   if (item.speak && String(item.speak).trim()) return String(item.speak).trim();
   if (item.icon && !item.label) return "Con cá";
   if (item.label) return `Chữ ${item.label}`;
   return "";
+}
+
+const miniAudioRuntime = { howls: [], blobUrls: [] };
+
+function miniAudioDisposeAll() {
+  miniAudioRuntime.howls.forEach((x) => x && x.unload());
+  miniAudioRuntime.blobUrls.forEach((u) => URL.revokeObjectURL(u));
+  miniAudioRuntime.howls = [];
+  miniAudioRuntime.blobUrls = [];
+}
+
+function miniGameTeardown() {
+  miniAudioDisposeAll();
+  const el = document.getElementById("letterTiles");
+  if (el) {
+    el.innerHTML = "";
+    el.dataset.inited = "";
+  }
 }
 
 function pickSouthernVietnameseVoice() {
@@ -716,7 +790,7 @@ function probeAudioFileUrl(url) {
   });
 }
 
-async function buildMiniHowl(HowlCtor, item, blobUrls) {
+async function buildMiniHowl(HowlCtor, item, blobUrls, audioBase = MINI_AUDIO_BASE) {
   const freq = item.freq ?? 440;
   const dur = item.dur ?? 0.28;
   const synthUrl = URL.createObjectURL(buildSineWavBlob(freq, dur));
@@ -724,7 +798,7 @@ async function buildMiniHowl(HowlCtor, item, blobUrls) {
 
   if (!HowlCtor) return { howl: null, hasMp3: false };
 
-  const rel = item.file ? `${MINI_AUDIO_BASE}${item.file}` : null;
+  const rel = item.file ? `${audioBase}${item.file}` : null;
   if (rel) {
     const abs = new URL(rel, window.location.href).href;
     const ok = await probeAudioFileUrl(abs);
@@ -757,39 +831,32 @@ async function buildMiniHowl(HowlCtor, item, blobUrls) {
 async function initMiniGameDemo() {
   const letterTilesEl = document.getElementById("letterTiles");
   if (!letterTilesEl) return;
-  const st = letterTilesEl.dataset.inited;
-  if (st === "1" || st === "loading") return;
+
+  miniGameTeardown();
+
   letterTilesEl.dataset.inited = "loading";
 
   refreshMiniTtsVoice();
 
   const HowlCtor = typeof Howl !== "undefined" ? Howl : null;
-  const blobUrls = [];
-  const howls = [];
+  const blobUrls = miniAudioRuntime.blobUrls;
+  const howls = miniAudioRuntime.howls;
 
-  let items = MINI_DEFAULT_ITEMS;
-  try {
-    const res = await fetch(MINI_MANIFEST_URL, { cache: "no-store" });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.items) && data.items.length > 0) items = data.items;
-    }
-  } catch {
-    /* manifest optional */
-  }
+  const n = Math.min(getAlphabetVisibleCount(), ENGLISH_ALPHABET_26.length);
+  const items = shuffleArray(ENGLISH_ALPHABET_26).slice(0, n);
 
   try {
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
       const speakLine = miniItemSpeakText(item);
-      const { howl: h, hasMp3 } = await buildMiniHowl(HowlCtor, item, blobUrls);
+      const { howl: h, hasMp3 } = await buildMiniHowl(HowlCtor, item, blobUrls, MINI_ALPHABET_BASE);
       howls.push(h);
 
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mini-tile";
-      btn.textContent = item.icon ? item.icon : item.label;
-      btn.setAttribute("aria-label", speakLine || (item.icon ? "Con ca" : `Chu ${item.label}`));
+      btn.textContent = item.label;
+      btn.setAttribute("aria-label", `Chu ${item.label}, ${speakLine}`);
       btn.addEventListener("click", () => {
         if (hasMp3 && h) {
           h.stop();
@@ -806,15 +873,9 @@ async function initMiniGameDemo() {
     }
     letterTilesEl.dataset.inited = "1";
   } catch (err) {
-    letterTilesEl.innerHTML = "";
-    letterTilesEl.dataset.inited = "";
+    miniGameTeardown();
     console.error(err);
   }
-
-  window.addEventListener("beforeunload", () => {
-    howls.forEach((x) => x && x.unload());
-    blobUrls.forEach((u) => URL.revokeObjectURL(u));
-  });
 }
 
 function setupAppNavigation() {
@@ -837,6 +898,8 @@ function setupAppNavigation() {
     });
   });
 }
+
+window.addEventListener("beforeunload", () => miniAudioDisposeAll());
 
 setupAppNavigation();
 updateHud();
