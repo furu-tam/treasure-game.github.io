@@ -634,11 +634,65 @@ const MINI_AUDIO_BASE = "assets/mini/";
 const MINI_MANIFEST_URL = `${MINI_AUDIO_BASE}audio-manifest.json`;
 
 const MINI_DEFAULT_ITEMS = [
-  { label: "A", freq: 440, dur: 0.28 },
-  { label: "B", freq: 494, dur: 0.28 },
-  { label: "C", freq: 523, dur: 0.28 },
-  { icon: "🐟", freq: 660, dur: 0.38 }
+  { label: "A", speak: "Á", freq: 440, dur: 0.28 },
+  { label: "B", speak: "Bê", freq: 494, dur: 0.28 },
+  { label: "C", speak: "Xê", freq: 523, dur: 0.28 },
+  { icon: "🐟", speak: "Con cá", freq: 660, dur: 0.38 }
 ];
+
+function miniItemSpeakText(item) {
+  if (item.speak && String(item.speak).trim()) return String(item.speak).trim();
+  if (item.icon && !item.label) return "Con cá";
+  if (item.label) return `Chữ ${item.label}`;
+  return "";
+}
+
+function pickSouthernVietnameseVoice() {
+  if (!window.speechSynthesis) return null;
+  const list = speechSynthesis.getVoices();
+  const vi = list.filter((v) => /^vi/i.test(v.lang || ""));
+  if (!vi.length) return null;
+  const key = (v) => `${v.name} ${v.lang}`.toLowerCase();
+  const rank = (v) => {
+    const k = key(v);
+    if (
+      /mien nam|miền nam|sai gon|sài gòn|saigon|ho chi minh|hồ chí minh|hcms|nam bo|nam bộ|south vietnam|southern/.test(
+        k
+      )
+    )
+      return 4;
+    if (/viet nam|vietnam|vietnamese|tieng viet|tiếng việt/.test(k)) return 2;
+    return 1;
+  };
+  return [...vi].sort((a, b) => rank(b) - rank(a))[0];
+}
+
+let miniTtsVoice = null;
+
+function refreshMiniTtsVoice() {
+  miniTtsVoice = pickSouthernVietnameseVoice();
+}
+
+function speakMiniTts(text) {
+  if (!text || !window.speechSynthesis) return false;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "vi-VN";
+    if (miniTtsVoice) u.voice = miniTtsVoice;
+    u.rate = 0.8;
+    u.pitch = 1.02;
+    speechSynthesis.speak(u);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (window.speechSynthesis) {
+  speechSynthesis.addEventListener("voiceschanged", refreshMiniTtsVoice);
+  refreshMiniTtsVoice();
+}
 
 function probeAudioFileUrl(url) {
   return new Promise((resolve) => {
@@ -668,7 +722,7 @@ async function buildMiniHowl(HowlCtor, item, blobUrls) {
   const synthUrl = URL.createObjectURL(buildSineWavBlob(freq, dur));
   blobUrls.push(synthUrl);
 
-  if (!HowlCtor) return null;
+  if (!HowlCtor) return { howl: null, hasMp3: false };
 
   const rel = item.file ? `${MINI_AUDIO_BASE}${item.file}` : null;
   if (rel) {
@@ -677,21 +731,27 @@ async function buildMiniHowl(HowlCtor, item, blobUrls) {
     if (ok) {
       URL.revokeObjectURL(synthUrl);
       blobUrls.pop();
-      return new HowlCtor({
-        src: [rel],
-        volume: 0.92,
-        preload: true,
-        html5: true
-      });
+      return {
+        hasMp3: true,
+        howl: new HowlCtor({
+          src: [rel],
+          volume: 0.92,
+          preload: true,
+          html5: true
+        })
+      };
     }
   }
 
-  return new HowlCtor({
-    src: [synthUrl],
-    format: ["wav"],
-    volume: 0.85,
-    preload: true
-  });
+  return {
+    hasMp3: false,
+    howl: new HowlCtor({
+      src: [synthUrl],
+      format: ["wav"],
+      volume: 0.85,
+      preload: true
+    })
+  };
 }
 
 async function initMiniGameDemo() {
@@ -700,6 +760,8 @@ async function initMiniGameDemo() {
   const st = letterTilesEl.dataset.inited;
   if (st === "1" || st === "loading") return;
   letterTilesEl.dataset.inited = "loading";
+
+  refreshMiniTtsVoice();
 
   const HowlCtor = typeof Howl !== "undefined" ? Howl : null;
   const blobUrls = [];
@@ -719,15 +781,22 @@ async function initMiniGameDemo() {
   try {
     for (let i = 0; i < items.length; i += 1) {
       const item = items[i];
-      const h = await buildMiniHowl(HowlCtor, item, blobUrls);
+      const speakLine = miniItemSpeakText(item);
+      const { howl: h, hasMp3 } = await buildMiniHowl(HowlCtor, item, blobUrls);
       howls.push(h);
 
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "mini-tile";
       btn.textContent = item.icon ? item.icon : item.label;
-      btn.setAttribute("aria-label", item.icon ? "Con ca" : `Chu ${item.label}`);
+      btn.setAttribute("aria-label", speakLine || (item.icon ? "Con ca" : `Chu ${item.label}`));
       btn.addEventListener("click", () => {
+        if (hasMp3 && h) {
+          h.stop();
+          h.play();
+          return;
+        }
+        if (speakLine && speakMiniTts(speakLine)) return;
         if (h) {
           h.stop();
           h.play();

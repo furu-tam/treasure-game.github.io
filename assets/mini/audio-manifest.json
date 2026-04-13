@@ -2,9 +2,9 @@
   "locale": "vi-VN-south",
   "note": "Dat file ghi am giong mien Nam vao cung thu muc, ten trung voi truong file. Tai file tu Google Drive vao day.",
   "items": [
-    { "label": "A", "file": "a-nam.mp3", "freq": 440, "dur": 0.28 },
-    { "label": "B", "file": "b-nam.mp3", "freq": 494, "dur": 0.28 },
-    { "label": "C", "file": "c-nam.mp3", "freq": 523, "dur": 0.28 },
-    { "icon": "🐟", "file": "con-ca-nam.mp3", "freq": 660, "dur": 0.38 }
+    { "label": "A", "speak": "Á", "file": "a-nam.mp3", "freq": 440, "dur": 0.28 },
+    { "label": "B", "speak": "Bê", "file": "b-nam.mp3", "freq": 494, "dur": 0.28 },
+    { "label": "C", "speak": "Xê", "file": "c-nam.mp3", "freq": 523, "dur": 0.28 },
+    { "icon": "🐟", "speak": "Con cá", "file": "con-ca-nam.mp3", "freq": 660, "dur": 0.38 }
   ]
 }
