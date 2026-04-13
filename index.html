@@ -19,6 +19,11 @@
         <h2>Mini Game</h2>
         <p>26 chu cai tieng Anh + MP3; moi lan vao random N chu theo man hinh.</p>
       </button>
+      <button type="button" class="menu-card menu-card--snake" data-app-view="snake">
+        <span class="menu-card__icon" aria-hidden="true">🐍</span>
+        <h2>Snake Game</h2>
+        <p>Ran san moi, cham tuong la thua. An moi +1 va dai hon.</p>
+      </button>
       <button type="button" class="menu-card menu-card--treasure" data-app-view="treasure">
         <span class="menu-card__icon" aria-hidden="true">💎</span>
         <h2>Treasure Game</h2>
@@ -27,7 +32,7 @@
     </main>
 
     <footer class="menu-footer">
-      <span>2 game hien co</span>
+      <span>3 game hien co</span>
     </footer>
   </div>
 
@@ -90,7 +95,35 @@
 
   <div id="viewMini" class="app-view page-mini section-hidden">
     <button type="button" class="nav-back nav-back--mini" data-app-view="menu">← Trang chu</button>
-    <div class="mini-stage" id="letterTiles" role="group" aria-label="Nut am thanh"></div>
+    <div class="mini-content">
+      <div id="miniLoader" class="mini-loader section-hidden" aria-live="polite" aria-busy="false">
+        <div class="mini-spinner" aria-hidden="true"></div>
+        <span class="mini-loader__text">Dang tai nut...</span>
+      </div>
+      <div class="mini-stage" id="letterTiles" role="group" aria-label="Nut am thanh"></div>
+    </div>
+  </div>
+
+  <div id="viewSnake" class="app-view page-snake section-hidden">
+    <button type="button" class="nav-back" data-app-view="menu">← Trang chu</button>
+    <section class="snake-panel">
+      <div class="snake-hud">
+        <span class="pill">Diem: <strong id="snakeScoreText">0</strong></span>
+        <button type="button" class="btn btn-start" id="snakeStartBtn">Start Snake</button>
+      </div>
+      <div class="snake-board-wrap">
+        <canvas id="snakeCanvas" width="600" height="600" aria-label="Snake board"></canvas>
+      </div>
+      <div class="snake-controls" aria-label="Dieu khien ran tren mobile">
+        <div></div>
+        <button type="button" class="snake-btn" data-snake-dir="up">↑</button>
+        <div></div>
+        <button type="button" class="snake-btn" data-snake-dir="left">←</button>
+        <button type="button" class="snake-btn" data-snake-dir="down">↓</button>
+        <button type="button" class="snake-btn" data-snake-dir="right">→</button>
+      </div>
+      <p class="snake-tip">PC: dung phim mui ten. Mobile: dung 4 nut dieu huong.</p>
+    </section>
   </div>
 
   <!-- howler.js v2.2.4 — https://github.com/goldfire/howler.js -->

@@ -763,7 +763,15 @@ function miniAudioDisposeAll() {
   miniAudioRuntime.blobUrls = [];
 }
 
+function setMiniLoading(loading) {
+  const loader = document.getElementById("miniLoader");
+  if (!loader) return;
+  loader.classList.toggle("section-hidden", !loading);
+  loader.setAttribute("aria-busy", loading ? "true" : "false");
+}
+
 function miniGameTeardown() {
+  setMiniLoading(false);
   miniAudioDisposeAll();
   const el = document.getElementById("letterTiles");
   if (el) {
@@ -885,6 +893,7 @@ async function initMiniGameDemo() {
 
   miniGameTeardown();
 
+  setMiniLoading(true);
   letterTilesEl.dataset.inited = "loading";
 
   refreshMiniTtsVoice();
@@ -895,6 +904,8 @@ async function initMiniGameDemo() {
 
   const n = Math.min(getAlphabetVisibleCount(), ENGLISH_ALPHABET_26.length);
   const items = shuffleArray(ENGLISH_ALPHABET_26).slice(0, n);
+
+  const frag = document.createDocumentFragment();
 
   try {
     for (let i = 0; i < items.length; i += 1) {
@@ -920,43 +931,230 @@ async function initMiniGameDemo() {
           h.play();
         }
       });
-      letterTilesEl.appendChild(btn);
+      frag.appendChild(btn);
     }
+    letterTilesEl.appendChild(frag);
     letterTilesEl.dataset.inited = "1";
+    setMiniLoading(false);
     ensureMiniViewLayoutObserver();
     const nTiles = items.length;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => layoutMiniStage(letterTilesEl, nTiles));
     });
   } catch (err) {
+    setMiniLoading(false);
     miniGameTeardown();
     console.error(err);
   }
+}
+
+const snakeCanvas = document.getElementById("snakeCanvas");
+const snakeStartBtn = document.getElementById("snakeStartBtn");
+const snakeScoreText = document.getElementById("snakeScoreText");
+
+const snakeState = {
+  running: false,
+  timerId: 0,
+  gridSize: 20,
+  dir: { x: 1, y: 0 },
+  nextDir: { x: 1, y: 0 },
+  snake: [],
+  food: { x: 5, y: 5 },
+  score: 0
+};
+
+function snakeCellSize() {
+  if (!snakeCanvas) return 1;
+  return snakeCanvas.width / snakeState.gridSize;
+}
+
+function spawnSnakeFood() {
+  if (!snakeCanvas) return;
+  const occupied = new Set(snakeState.snake.map((p) => `${p.x},${p.y}`));
+  const free = [];
+  for (let y = 0; y < snakeState.gridSize; y += 1) {
+    for (let x = 0; x < snakeState.gridSize; x += 1) {
+      const k = `${x},${y}`;
+      if (!occupied.has(k)) free.push({ x, y });
+    }
+  }
+  if (!free.length) return;
+  snakeState.food = free[randInt(0, free.length - 1)];
+}
+
+function drawSnakeBoard() {
+  if (!snakeCanvas) return;
+  const ctx = snakeCanvas.getContext("2d");
+  if (!ctx) return;
+  const size = snakeCellSize();
+  ctx.fillStyle = "#020617";
+  ctx.fillRect(0, 0, snakeCanvas.width, snakeCanvas.height);
+
+  ctx.strokeStyle = "rgba(148,163,184,0.12)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= snakeState.gridSize; i += 1) {
+    const p = i * size;
+    ctx.beginPath();
+    ctx.moveTo(p, 0);
+    ctx.lineTo(p, snakeCanvas.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, p);
+    ctx.lineTo(snakeCanvas.width, p);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(snakeState.food.x * size + 2, snakeState.food.y * size + 2, size - 4, size - 4);
+
+  snakeState.snake.forEach((s, idx) => {
+    ctx.fillStyle = idx === 0 ? "#22c55e" : "#16a34a";
+    ctx.fillRect(s.x * size + 2, s.y * size + 2, size - 4, size - 4);
+  });
+}
+
+function updateSnakeScoreText() {
+  if (snakeScoreText) snakeScoreText.textContent = String(snakeState.score);
+}
+
+function stopSnakeGame(showMessage = false) {
+  snakeState.running = false;
+  if (snakeState.timerId) {
+    clearInterval(snakeState.timerId);
+    snakeState.timerId = 0;
+  }
+  if (showMessage) {
+    setTimeout(() => {
+      window.alert(`Game over! Diem cua ban: ${snakeState.score}`);
+    }, 20);
+  }
+}
+
+function snakeStep() {
+  if (!snakeState.running) return;
+  snakeState.dir = { ...snakeState.nextDir };
+  const head = snakeState.snake[0];
+  const nh = { x: head.x + snakeState.dir.x, y: head.y + snakeState.dir.y };
+
+  if (nh.x < 0 || nh.y < 0 || nh.x >= snakeState.gridSize || nh.y >= snakeState.gridSize) {
+    stopSnakeGame(true);
+    return;
+  }
+  if (snakeState.snake.some((p) => p.x === nh.x && p.y === nh.y)) {
+    stopSnakeGame(true);
+    return;
+  }
+
+  snakeState.snake.unshift(nh);
+  if (nh.x === snakeState.food.x && nh.y === snakeState.food.y) {
+    snakeState.score += 1;
+    updateSnakeScoreText();
+    spawnSnakeFood();
+  } else {
+    snakeState.snake.pop();
+  }
+  drawSnakeBoard();
+}
+
+function setSnakeDirection(dirName) {
+  const map = {
+    up: { x: 0, y: -1 },
+    down: { x: 0, y: 1 },
+    left: { x: -1, y: 0 },
+    right: { x: 1, y: 0 }
+  };
+  const next = map[dirName];
+  if (!next) return;
+  if (next.x === -snakeState.dir.x && next.y === -snakeState.dir.y) return;
+  snakeState.nextDir = next;
+}
+
+function resizeSnakeCanvas() {
+  if (!snakeCanvas) return;
+  const box = snakeCanvas.getBoundingClientRect();
+  const side = Math.max(280, Math.min(box.width, window.innerHeight * 0.72));
+  snakeCanvas.width = Math.round(side);
+  snakeCanvas.height = Math.round(side);
+  drawSnakeBoard();
+}
+
+function startSnakeGame() {
+  if (!snakeCanvas) return;
+  stopSnakeGame(false);
+  snakeState.score = 0;
+  updateSnakeScoreText();
+  const mid = Math.floor(snakeState.gridSize / 2);
+  snakeState.snake = [
+    { x: mid, y: mid },
+    { x: mid - 1, y: mid },
+    { x: mid - 2, y: mid }
+  ];
+  snakeState.dir = { x: 1, y: 0 };
+  snakeState.nextDir = { x: 1, y: 0 };
+  spawnSnakeFood();
+  snakeState.running = true;
+  drawSnakeBoard();
+  snakeState.timerId = window.setInterval(snakeStep, 120);
+}
+
+function initSnakeBindings() {
+  if (snakeStartBtn) {
+    snakeStartBtn.addEventListener("click", startSnakeGame);
+  }
+  document.querySelectorAll("[data-snake-dir]").forEach((btn) => {
+    const d = btn.getAttribute("data-snake-dir");
+    btn.addEventListener("click", () => setSnakeDirection(d));
+  });
+  window.addEventListener("keydown", (ev) => {
+    const snakeView = document.getElementById("viewSnake");
+    if (!snakeView || snakeView.classList.contains("section-hidden")) return;
+    const map = {
+      ArrowUp: "up",
+      ArrowDown: "down",
+      ArrowLeft: "left",
+      ArrowRight: "right"
+    };
+    const d = map[ev.key];
+    if (!d) return;
+    ev.preventDefault();
+    setSnakeDirection(d);
+  });
+  window.addEventListener("resize", () => {
+    const snakeView = document.getElementById("viewSnake");
+    if (snakeView && !snakeView.classList.contains("section-hidden")) resizeSnakeCanvas();
+  });
+  resizeSnakeCanvas();
+  drawSnakeBoard();
 }
 
 function setupAppNavigation() {
   const viewMenu = document.getElementById("viewMenu");
   const viewTreasure = document.getElementById("viewTreasure");
   const viewMini = document.getElementById("viewMini");
-  if (!viewMenu || !viewTreasure || !viewMini) return;
+  const viewSnake = document.getElementById("viewSnake");
+  if (!viewMenu || !viewTreasure || !viewMini || !viewSnake) return;
 
   function showAppView(name) {
     viewMenu.classList.toggle("section-hidden", name !== "menu");
     viewTreasure.classList.toggle("section-hidden", name !== "treasure");
     viewMini.classList.toggle("section-hidden", name !== "mini");
+    viewSnake.classList.toggle("section-hidden", name !== "snake");
     if (name === "mini") void initMiniGameDemo();
+    if (name === "snake") resizeSnakeCanvas();
+    else stopSnakeGame(false);
   }
 
   document.querySelectorAll("[data-app-view]").forEach((el) => {
     el.addEventListener("click", () => {
       const v = el.getAttribute("data-app-view");
-      if (v === "menu" || v === "treasure" || v === "mini") showAppView(v);
+      if (v === "menu" || v === "treasure" || v === "mini" || v === "snake") showAppView(v);
     });
   });
 }
 
 window.addEventListener("beforeunload", () => miniAudioDisposeAll());
 
+initSnakeBindings();
 setupAppNavigation();
 updateHud();
 applyRandomBackground();

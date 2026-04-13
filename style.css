@@ -517,6 +517,10 @@ button.menu-card p {
   background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(21, 94, 117, 0.4));
 }
 
+.menu-card--snake {
+  background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(22, 101, 52, 0.45));
+}
+
 .menu-card__icon {
   font-size: 2.25rem;
   line-height: 1;
@@ -561,6 +565,58 @@ button.menu-card p {
 .nav-back--mini {
   margin-bottom: clamp(8px, 2.5vw, 16px);
   flex-shrink: 0;
+}
+
+.mini-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mini-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
+}
+
+.mini-loader.section-hidden {
+  display: none !important;
+}
+
+.mini-spinner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 4px solid rgba(147, 197, 253, 0.25);
+  border-top-color: #93c5fd;
+  animation: miniSpin 0.75s linear infinite;
+}
+
+.mini-loader__text {
+  font-size: 15px;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+@keyframes miniSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mini-content .mini-stage {
+  flex: 1;
+  min-height: 0;
 }
 
 .mini-stage {
@@ -613,4 +669,74 @@ button.menu-card p {
 
 .mini-tile:active {
   transform: scale(0.96);
+}
+
+.page-snake {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.snake-panel {
+  display: grid;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.snake-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.snake-board-wrap {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #020617;
+}
+
+#snakeCanvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: min(70vh, 760px);
+  background: #020617;
+}
+
+.snake-controls {
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  grid-template-rows: repeat(2, 68px);
+  gap: 10px;
+}
+
+.snake-btn {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #334155, #1e293b);
+  color: #e2e8f0;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.snake-tip {
+  color: #cbd5e1;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (min-width: 900px) {
+  .snake-controls {
+    display: none;
+  }
 }
