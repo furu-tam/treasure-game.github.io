@@ -1192,6 +1192,25 @@ function chickenGroundAt(x) {
   return chickenState.terrain[i] ?? (chickenState.worldH - 40);
 }
 
+function chickenProjectileTerrainHit(prev, next, hitR) {
+  const dx = next.x - prev.x;
+  const dy = next.y - prev.y;
+  const dist = Math.hypot(dx, dy);
+  const steps = Math.max(10, Math.min(48, Math.ceil(dist / 6)));
+  for (let s = 0; s <= steps; s += 1) {
+    const t = s / steps;
+    const x = prev.x + dx * t;
+    const y = prev.y + dy * t;
+    if (x < 0 || x > chickenState.worldW) {
+      const cx = Math.max(0, Math.min(chickenState.worldW, x));
+      return { x: cx, y: chickenGroundAt(cx), onTerrain: false };
+    }
+    const g = chickenGroundAt(x);
+    if (y >= g - hitR) return { x, y: g, onTerrain: true };
+  }
+  return null;
+}
+
 function chickenResizeCanvas() {
   if (!chickenCanvas) return;
   const box = chickenCanvas.getBoundingClientRect();
@@ -1366,13 +1385,21 @@ function chickenTick(ts) {
   const p = chickenState.projectile;
   if (p) {
     const dt = 1 / 60;
+    const prev = { x: p.x, y: p.y };
     p.vx += chickenState.wind * dt * 0.08;
     p.vy += chickenState.gravity * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    const groundY = chickenGroundAt(p.x);
-    if (p.x < 0 || p.x > chickenState.worldW || p.y >= groundY || p.y < 0) {
-      chickenExplode(Math.max(0, Math.min(chickenState.worldW, p.x)), Math.min(groundY, Math.max(0, p.y)), p.blast, p.damage);
+    const hitR = Math.max(4, p.radius * 0.45);
+    if (p.y < 0) {
+      chickenExplode(Math.max(0, Math.min(chickenState.worldW, p.x)), 0, p.blast, p.damage);
+    } else {
+      const hit = chickenProjectileTerrainHit(prev, { x: p.x, y: p.y }, hitR);
+      if (hit) {
+        const ex = Math.max(0, Math.min(chickenState.worldW, hit.x));
+        const ey = hit.onTerrain ? hit.y : chickenGroundAt(ex);
+        chickenExplode(ex, ey, p.blast, p.damage);
+      }
     }
   }
   chickenDraw();
