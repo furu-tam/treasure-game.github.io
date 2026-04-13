@@ -564,6 +564,14 @@ function connectMultiplayer() {
           (x) => Number(x.dataset.order) === Number(data.order) && x.dataset.revealed !== "true"
         );
         if (btn) handleTileClick(btn, msg.from);
+      } else if (data.kind === "chicken_start" && isRoomHost) {
+        chickenStartGame();
+      } else if (data.kind === "chicken_need_state" && isRoomHost) {
+        chickenSyncState();
+      } else if (data.kind === "chicken_input") {
+        chickenHandleRemoteInput(data, msg.from);
+      } else if (data.kind === "chicken_full_state" && !isRoomHost) {
+        chickenApplyState(data.state || {});
       }
     }
   });
@@ -1131,7 +1139,9 @@ const chickenCanvas = document.getElementById("chickenCanvas");
 const chickenStartBtn = document.getElementById("chickenStartBtn");
 const chickenFireBtn = document.getElementById("chickenFireBtn");
 const chickenAngleInput = document.getElementById("chickenAngleInput");
+const chickenPowerInput = document.getElementById("chickenPowerInput");
 const chickenAngleText = document.getElementById("chickenAngleText");
+const chickenPowerText = document.getElementById("chickenPowerText");
 const chickenTurnText = document.getElementById("chickenTurnText");
 const chickenHp1Text = document.getElementById("chickenHp1Text");
 const chickenHp2Text = document.getElementById("chickenHp2Text");
@@ -1141,6 +1151,8 @@ const chickenHp1Bar = document.getElementById("chickenHp1Bar");
 const chickenHp2Bar = document.getElementById("chickenHp2Bar");
 const chickenEnergy1Bar = document.getElementById("chickenEnergy1Bar");
 const chickenEnergy2Bar = document.getElementById("chickenEnergy2Bar");
+const chickenMoveLeftBtn = document.getElementById("chickenMoveLeftBtn");
+const chickenMoveRightBtn = document.getElementById("chickenMoveRightBtn");
 
 const chickenState = {
   active: false,
@@ -1151,7 +1163,9 @@ const chickenState = {
   projectile: null,
   players: [],
   turnIdx: 0,
-  animId: 0
+  animId: 0,
+  terrain: [],
+  hostControlled: false
 };
 
 function chickenCurrentPlayer() {
@@ -1162,6 +1176,22 @@ function chickenOtherPlayer() {
   return chickenState.players[(chickenState.turnIdx + 1) % 2] || null;
 }
 
+function chickenIsHostAuthority() {
+  return mpConnected() ? isRoomHost : true;
+}
+
+function chickenCanControlTurn() {
+  const cur = chickenCurrentPlayer();
+  if (!cur) return false;
+  if (!mpConnected()) return true;
+  return cur.ownerId === mpClientId;
+}
+
+function chickenGroundAt(x) {
+  const i = Math.max(0, Math.min(chickenState.worldW - 1, Math.round(x)));
+  return chickenState.terrain[i] ?? (chickenState.worldH - 40);
+}
+
 function chickenResizeCanvas() {
   if (!chickenCanvas) return;
   const box = chickenCanvas.getBoundingClientRect();
@@ -1169,13 +1199,26 @@ function chickenResizeCanvas() {
   chickenCanvas.height = Math.max(360, Math.round(chickenCanvas.width * 9 / 16));
 }
 
+function chickenGenerateTerrain() {
+  const base = chickenState.worldH - 120;
+  chickenState.terrain = Array.from({ length: chickenState.worldW }, (_, x) => {
+    const a = Math.sin(x * 0.012) * 24;
+    const b = Math.sin(x * 0.033 + 1.8) * 16;
+    return Math.max(chickenState.worldH - 190, Math.min(chickenState.worldH - 60, base + a + b));
+  });
+}
+
 function chickenSpawnPlayers() {
-  const floorY = chickenState.worldH - 48;
+  chickenGenerateTerrain();
   const p1x = randInt(120, 320);
   const p2x = randInt(680, 880);
+  const p1Owner = mpConnected() ? mpClientId : "local-1";
+  const p2Owner = mpConnected()
+    ? Object.keys(playerStats).find((id) => id !== mpClientId) || mpClientId
+    : "local-2";
   chickenState.players = [
-    { id: 1, x: p1x, y: floorY, hp: 100, energy: 0, angle: 45 },
-    { id: 2, x: p2x, y: floorY, hp: 100, energy: 0, angle: 45 }
+    { id: 1, ownerId: p1Owner, x: p1x, y: chickenGroundAt(p1x) - 22, hp: 100, energy: 0, angle: 45, power: 70 },
+    { id: 2, ownerId: p2Owner, x: p2x, y: chickenGroundAt(p2x) - 22, hp: 100, energy: 0, angle: 45, power: 70 }
   ];
   chickenState.turnIdx = randInt(0, 1);
   chickenState.projectile = null;
@@ -1196,6 +1239,7 @@ function chickenUiUpdate() {
   if (chickenEnergy2Bar) chickenEnergy2Bar.style.width = `${Math.max(0, p2.energy)}%`;
   if (chickenTurnText) chickenTurnText.textContent = chickenCurrentPlayer() ? `P${chickenCurrentPlayer().id}` : "-";
   if (chickenAngleText && chickenAngleInput) chickenAngleText.textContent = `${chickenAngleInput.value}°`;
+  if (chickenPowerText && chickenPowerInput) chickenPowerText.textContent = `${chickenPowerInput.value}%`;
 }
 
 function chickenWorldToScreen(x, y) {
@@ -1220,9 +1264,16 @@ function chickenDraw() {
   ctx.fillStyle = grd;
   ctx.fillRect(0, 0, W, H);
 
-  const floorY = chickenWorldToScreen(0, chickenState.worldH - 40).y;
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.fillRect(0, floorY, W, H - floorY);
+  ctx.fillStyle = "rgba(0,0,0,0.32)";
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x < chickenState.worldW; x += 4) {
+    const s = chickenWorldToScreen(x, chickenGroundAt(x));
+    ctx.lineTo(s.x, s.y);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
 
   chickenState.players.forEach((p) => {
     const s = chickenWorldToScreen(p.x, p.y);
@@ -1239,7 +1290,7 @@ function chickenDraw() {
   const shooter = chickenCurrentPlayer();
   if (shooter && !chickenState.projectile) {
     const s = chickenWorldToScreen(shooter.x, shooter.y);
-    const a = (Number(chickenAngleInput?.value || 45) * Math.PI) / 180;
+    const a = (Number(chickenAngleInput?.value || shooter.angle || 45) * Math.PI) / 180;
     const dir = shooter.id === 1 ? 1 : -1;
     ctx.strokeStyle = "#e5e7eb";
     ctx.lineWidth = 3;
@@ -1265,11 +1316,30 @@ function chickenEndTurn() {
   if (current) current.energy = Math.min(100, current.energy + 35);
   chickenState.turnIdx = (chickenState.turnIdx + 1) % 2;
   const next = chickenCurrentPlayer();
-  if (next && chickenAngleInput) chickenAngleInput.value = String(next.angle);
+  if (next && chickenAngleInput) chickenAngleInput.value = String(next.angle || 45);
+  if (next && chickenPowerInput) chickenPowerInput.value = String(next.power || 70);
   chickenUiUpdate();
+  chickenSyncState();
+}
+
+function chickenDestroyTerrain(cx, radius) {
+  const r = Math.max(8, radius);
+  const minX = Math.max(0, Math.floor(cx - r));
+  const maxX = Math.min(chickenState.worldW - 1, Math.ceil(cx + r));
+  for (let x = minX; x <= maxX; x += 1) {
+    const dx = x - cx;
+    const inside = r * r - dx * dx;
+    if (inside <= 0) continue;
+    const depth = Math.sqrt(inside);
+    chickenState.terrain[x] = Math.min(chickenState.worldH - 20, chickenGroundAt(x) + depth * 0.55);
+  }
+  chickenState.players.forEach((pl) => {
+    pl.y = chickenGroundAt(pl.x) - 22;
+  });
 }
 
 function chickenExplode(x, y, radius, dmg) {
+  chickenDestroyTerrain(x, radius * 0.95);
   chickenState.players.forEach((pl) => {
     const dx = pl.x - x;
     const dy = pl.y - y;
@@ -1284,6 +1354,7 @@ function chickenExplode(x, y, radius, dmg) {
   if (dead) {
     chickenState.active = false;
     chickenState.projectile = null;
+    chickenSyncState();
     setTimeout(() => window.alert(`P${dead.id} thua!`), 10);
     return;
   }
@@ -1299,7 +1370,7 @@ function chickenTick(ts) {
     p.vy += chickenState.gravity * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    const groundY = chickenState.worldH - 40;
+    const groundY = chickenGroundAt(p.x);
     if (p.x < 0 || p.x > chickenState.worldW || p.y >= groundY || p.y < 0) {
       chickenExplode(Math.max(0, Math.min(chickenState.worldW, p.x)), Math.min(groundY, Math.max(0, p.y)), p.blast, p.damage);
     }
@@ -1308,17 +1379,32 @@ function chickenTick(ts) {
   chickenState.animId = window.requestAnimationFrame(chickenTick);
 }
 
+function chickenMovePlayer(dx) {
+  if (!chickenState.active || chickenState.projectile) return;
+  if (!chickenCanControlTurn()) return;
+  const p = chickenCurrentPlayer();
+  if (!p) return;
+  p.x = Math.max(24, Math.min(chickenState.worldW - 24, p.x + dx));
+  p.y = chickenGroundAt(p.x) - 22;
+  chickenSyncState();
+  chickenDraw();
+}
+
 function chickenShoot() {
   if (!chickenState.active || chickenState.projectile) return;
+  if (!chickenCanControlTurn()) return;
   const shooter = chickenCurrentPlayer();
   if (!shooter) return;
-  const angle = Math.max(10, Math.min(80, Number(chickenAngleInput?.value || shooter.angle)));
+  const angle = Math.max(10, Math.min(80, Number(chickenAngleInput?.value || shooter.angle || 45)));
+  const powerPct = Math.max(30, Math.min(100, Number(chickenPowerInput?.value || shooter.power || 70)));
   shooter.angle = angle;
+  shooter.power = powerPct;
   const a = (angle * Math.PI) / 180;
   const dir = shooter.id === 1 ? 1 : -1;
   const superShot = shooter.energy >= 100;
   if (superShot) shooter.energy = 0;
-  const power = superShot ? 760 : 620;
+  const base = 560 + powerPct * 4;
+  const power = superShot ? base * 1.22 : base;
   const radius = superShot ? 20 : 4;
   const blast = superShot ? 150 : 60;
   const damage = superShot ? 65 : 30;
@@ -1333,6 +1419,7 @@ function chickenShoot() {
     super: superShot
   };
   chickenUiUpdate();
+  chickenSyncState();
 }
 
 function chickenTapShoot() {
@@ -1342,14 +1429,20 @@ function chickenTapShoot() {
 }
 
 function chickenStartGame() {
+  if (mpConnected() && !isRoomHost) {
+    sendRoomMsg({ kind: "chicken_start" }, { toHostOnly: true });
+    return;
+  }
   chickenResizeCanvas();
   chickenSpawnPlayers();
   chickenState.active = true;
   const p = chickenCurrentPlayer();
   if (p && chickenAngleInput) chickenAngleInput.value = String(p.angle);
+  if (p && chickenPowerInput) chickenPowerInput.value = String(p.power || 70);
   chickenUiUpdate();
   if (chickenState.animId) cancelAnimationFrame(chickenState.animId);
   chickenState.animId = window.requestAnimationFrame(chickenTick);
+  chickenSyncState();
 }
 
 function chickenStopGame() {
@@ -1362,24 +1455,100 @@ function chickenStopGame() {
   chickenDraw();
 }
 
+function chickenSerializeState() {
+  return {
+    active: chickenState.active,
+    terrain: chickenState.terrain,
+    players: chickenState.players,
+    turnIdx: chickenState.turnIdx,
+    projectile: chickenState.projectile,
+    wind: chickenState.wind
+  };
+}
+
+function chickenApplyState(payload) {
+  chickenState.active = Boolean(payload.active);
+  chickenState.terrain = Array.isArray(payload.terrain) ? payload.terrain : [];
+  chickenState.players = Array.isArray(payload.players) ? payload.players : [];
+  chickenState.turnIdx = Number(payload.turnIdx || 0);
+  chickenState.projectile = payload.projectile || null;
+  chickenState.wind = Number(payload.wind || 0);
+  const cur = chickenCurrentPlayer();
+  if (cur && chickenAngleInput) chickenAngleInput.value = String(cur.angle || 45);
+  if (cur && chickenPowerInput) chickenPowerInput.value = String(cur.power || 70);
+  chickenUiUpdate();
+  chickenDraw();
+}
+
+function chickenSyncState() {
+  if (!mpConnected() || !isRoomHost) return;
+  sendRoomMsg({ kind: "chicken_full_state", state: chickenSerializeState() }, { excludeSelf: true });
+}
+
+function chickenHandleRemoteInput(data, fromId) {
+  if (!isRoomHost) return;
+  if (!chickenState.active) return;
+  const cur = chickenCurrentPlayer();
+  if (!cur || cur.ownerId !== fromId) return;
+  if (data.action === "move_left") chickenMovePlayer(-20);
+  if (data.action === "move_right") chickenMovePlayer(20);
+  if (data.action === "set_angle" && chickenAngleInput) chickenAngleInput.value = String(data.value);
+  if (data.action === "set_power" && chickenPowerInput) chickenPowerInput.value = String(data.value);
+  if (data.action === "shoot") chickenShoot();
+}
+
 function initChickenBindings() {
   if (chickenStartBtn) chickenStartBtn.addEventListener("click", chickenStartGame);
   if (chickenFireBtn) chickenFireBtn.addEventListener("click", chickenShoot);
   if (chickenAngleInput) {
     chickenAngleInput.addEventListener("input", () => {
+      const cur = chickenCurrentPlayer();
+      if (cur) cur.angle = Number(chickenAngleInput.value);
       chickenUiUpdate();
       chickenDraw();
+      if (mpConnected() && !isRoomHost) {
+        sendRoomMsg({ kind: "chicken_input", action: "set_angle", value: Number(chickenAngleInput.value) }, { toHostOnly: true });
+      }
+    });
+  }
+  if (chickenPowerInput) {
+    chickenPowerInput.addEventListener("input", () => {
+      const cur = chickenCurrentPlayer();
+      if (cur) cur.power = Number(chickenPowerInput.value);
+      chickenUiUpdate();
+      if (mpConnected() && !isRoomHost) {
+        sendRoomMsg({ kind: "chicken_input", action: "set_power", value: Number(chickenPowerInput.value) }, { toHostOnly: true });
+      }
     });
   }
   if (chickenCanvas) {
     chickenCanvas.addEventListener("click", chickenTapShoot);
+  }
+  if (chickenMoveLeftBtn) {
+    chickenMoveLeftBtn.addEventListener("click", () => {
+      if (mpConnected() && !isRoomHost) {
+        sendRoomMsg({ kind: "chicken_input", action: "move_left" }, { toHostOnly: true });
+      } else {
+        chickenMovePlayer(-20);
+      }
+    });
+  }
+  if (chickenMoveRightBtn) {
+    chickenMoveRightBtn.addEventListener("click", () => {
+      if (mpConnected() && !isRoomHost) {
+        sendRoomMsg({ kind: "chicken_input", action: "move_right" }, { toHostOnly: true });
+      } else {
+        chickenMovePlayer(20);
+      }
+    });
   }
   window.addEventListener("keydown", (ev) => {
     const chickenView = document.getElementById("viewChicken");
     if (!chickenView || chickenView.classList.contains("section-hidden")) return;
     if (ev.code === "Space") {
       ev.preventDefault();
-      chickenShoot();
+      if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_input", action: "shoot" }, { toHostOnly: true });
+      else chickenShoot();
     }
     if (ev.key === "ArrowUp" && chickenAngleInput) {
       ev.preventDefault();
@@ -1392,6 +1561,16 @@ function initChickenBindings() {
       chickenAngleInput.value = String(Math.max(10, Number(chickenAngleInput.value) - 2));
       chickenUiUpdate();
       chickenDraw();
+    }
+    if (ev.key.toLowerCase() === "a") {
+      ev.preventDefault();
+      if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_input", action: "move_left" }, { toHostOnly: true });
+      else chickenMovePlayer(-20);
+    }
+    if (ev.key.toLowerCase() === "d") {
+      ev.preventDefault();
+      if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_input", action: "move_right" }, { toHostOnly: true });
+      else chickenMovePlayer(20);
     }
   });
   window.addEventListener("resize", () => {
@@ -1426,6 +1605,7 @@ function setupAppNavigation() {
     if (name === "chicken") {
       chickenResizeCanvas();
       chickenDraw();
+      if (mpConnected() && !isRoomHost) sendRoomMsg({ kind: "chicken_need_state" }, { toHostOnly: true });
     } else {
       chickenStopGame();
     }

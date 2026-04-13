@@ -817,6 +817,20 @@ button.menu-card p {
   width: 180px;
 }
 
+#chickenPowerInput {
+  width: 180px;
+}
+
+.chicken-move {
+  display: flex;
+  gap: 8px;
+}
+
+.chicken-move .snake-btn {
+  padding: 8px 10px;
+  font-size: 18px;
+}
+
 @media (max-width: 700px) {
   .chicken-bars {
     grid-template-columns: 1fr;
