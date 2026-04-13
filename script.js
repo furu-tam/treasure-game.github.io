@@ -630,46 +630,120 @@ function buildSineWavBlob(freqHz, durationSec, sampleRate = 24000) {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
-function initMiniGameDemo() {
+const MINI_AUDIO_BASE = "assets/mini/";
+const MINI_MANIFEST_URL = `${MINI_AUDIO_BASE}audio-manifest.json`;
+
+const MINI_DEFAULT_ITEMS = [
+  { label: "A", freq: 440, dur: 0.28 },
+  { label: "B", freq: 494, dur: 0.28 },
+  { label: "C", freq: 523, dur: 0.28 },
+  { icon: "🐟", freq: 660, dur: 0.38 }
+];
+
+function probeAudioFileUrl(url) {
+  return new Promise((resolve) => {
+    const audio = new Audio();
+    const done = (ok) => {
+      audio.removeAttribute("src");
+      resolve(ok);
+    };
+    const t = setTimeout(() => done(false), 4000);
+    audio.oncanplaythrough = () => {
+      clearTimeout(t);
+      done(true);
+    };
+    audio.onerror = () => {
+      clearTimeout(t);
+      done(false);
+    };
+    audio.preload = "auto";
+    audio.src = url;
+    audio.load();
+  });
+}
+
+async function buildMiniHowl(HowlCtor, item, blobUrls) {
+  const freq = item.freq ?? 440;
+  const dur = item.dur ?? 0.28;
+  const synthUrl = URL.createObjectURL(buildSineWavBlob(freq, dur));
+  blobUrls.push(synthUrl);
+
+  if (!HowlCtor) return null;
+
+  const rel = item.file ? `${MINI_AUDIO_BASE}${item.file}` : null;
+  if (rel) {
+    const abs = new URL(rel, window.location.href).href;
+    const ok = await probeAudioFileUrl(abs);
+    if (ok) {
+      URL.revokeObjectURL(synthUrl);
+      blobUrls.pop();
+      return new HowlCtor({
+        src: [rel],
+        volume: 0.92,
+        preload: true,
+        html5: true
+      });
+    }
+  }
+
+  return new HowlCtor({
+    src: [synthUrl],
+    format: ["wav"],
+    volume: 0.85,
+    preload: true
+  });
+}
+
+async function initMiniGameDemo() {
   const letterTilesEl = document.getElementById("letterTiles");
-  if (!letterTilesEl || letterTilesEl.dataset.inited === "1") return;
-  letterTilesEl.dataset.inited = "1";
+  if (!letterTilesEl) return;
+  const st = letterTilesEl.dataset.inited;
+  if (st === "1" || st === "loading") return;
+  letterTilesEl.dataset.inited = "loading";
 
   const HowlCtor = typeof Howl !== "undefined" ? Howl : null;
-  const demoLetters = [
-    { label: "A", freq: 440, dur: 0.28 },
-    { label: "B", freq: 494, dur: 0.28 },
-    { label: "C", freq: 523, dur: 0.28 },
-    { label: "Ca", icon: "🐟", freq: 660, dur: 0.38 }
-  ];
-
   const blobUrls = [];
   const howls = [];
 
-  demoLetters.forEach((item) => {
-    const url = URL.createObjectURL(buildSineWavBlob(item.freq, item.dur));
-    blobUrls.push(url);
-    const h = HowlCtor
-      ? new HowlCtor({ src: [url], format: ["wav"], volume: 0.85, preload: true })
-      : null;
-    howls.push(h);
+  let items = MINI_DEFAULT_ITEMS;
+  try {
+    const res = await fetch(MINI_MANIFEST_URL, { cache: "no-store" });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.items) && data.items.length > 0) items = data.items;
+    }
+  } catch {
+    /* manifest optional */
+  }
 
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "mini-tile";
-    btn.textContent = item.icon ? item.icon : item.label;
-    btn.setAttribute("aria-label", item.icon ? "Con ca" : `Chu ${item.label}`);
-    btn.addEventListener("click", () => {
-      if (h) {
-        h.stop();
-        h.play();
-      }
-    });
-    letterTilesEl.appendChild(btn);
-  });
+  try {
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const h = await buildMiniHowl(HowlCtor, item, blobUrls);
+      howls.push(h);
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "mini-tile";
+      btn.textContent = item.icon ? item.icon : item.label;
+      btn.setAttribute("aria-label", item.icon ? "Con ca" : `Chu ${item.label}`);
+      btn.addEventListener("click", () => {
+        if (h) {
+          h.stop();
+          h.play();
+        }
+      });
+      letterTilesEl.appendChild(btn);
+    }
+    letterTilesEl.dataset.inited = "1";
+  } catch (err) {
+    letterTilesEl.innerHTML = "";
+    letterTilesEl.dataset.inited = "";
+    console.error(err);
+  }
 
   window.addEventListener("beforeunload", () => {
-    howls.forEach((h) => h && h.unload());
+    howls.forEach((x) => x && x.unload());
     blobUrls.forEach((u) => URL.revokeObjectURL(u));
   });
 }
@@ -684,7 +758,7 @@ function setupAppNavigation() {
     viewMenu.classList.toggle("section-hidden", name !== "menu");
     viewTreasure.classList.toggle("section-hidden", name !== "treasure");
     viewMini.classList.toggle("section-hidden", name !== "mini");
-    if (name === "mini") initMiniGameDemo();
+    if (name === "mini") void initMiniGameDemo();
   }
 
   document.querySelectorAll("[data-app-view]").forEach((el) => {

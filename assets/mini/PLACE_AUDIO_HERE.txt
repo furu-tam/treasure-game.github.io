@@ -1,0 +1,3 @@
+1. Tai cac file MP3 tu Google Drive cua ban.
+2. Dat vao thu muc nay voi dung ten trong audio-manifest.json (vd: a-nam.mp3, b-nam.mp3, c-nam.mp3, con-ca-nam.mp3).
+3. Commit + push de GitHub Pages phat duoc am.
