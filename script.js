@@ -586,35 +586,91 @@ window.addEventListener("resize", () => {
   if (gameActive && !mpConnected()) randomizeMap();
 });
 
+function buildSineWavBlob(freqHz, durationSec, sampleRate = 24000) {
+  const numSamples = Math.floor(sampleRate * durationSec);
+  const dataSize = numSamples * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buffer);
+  let o = 0;
+  const w = (s) => {
+    for (let i = 0; i < s.length; i += 1) v.setUint8(o++, s.charCodeAt(i));
+  };
+  w("RIFF");
+  v.setUint32(o, 36 + dataSize, true);
+  o += 4;
+  w("WAVE");
+  w("fmt ");
+  v.setUint32(o, 16, true);
+  o += 4;
+  v.setUint16(o, 1, true);
+  o += 2;
+  v.setUint16(o, 1, true);
+  o += 2;
+  v.setUint32(o, sampleRate, true);
+  o += 4;
+  v.setUint32(o, sampleRate * 2, true);
+  o += 4;
+  v.setUint16(o, 2, true);
+  o += 2;
+  v.setUint16(o, 16, true);
+  o += 2;
+  w("data");
+  v.setUint32(o, dataSize, true);
+  o += 4;
+  const vol = 0.22;
+  for (let i = 0; i < numSamples; i += 1) {
+    const t = i / sampleRate;
+    const fadeIn = Math.min(1, i / 80);
+    const fadeOut = Math.min(1, (numSamples - i) / 120);
+    const env = fadeIn * fadeOut;
+    const s = Math.sin(2 * Math.PI * freqHz * t) * vol * env;
+    v.setInt16(o, Math.max(-32768, Math.min(32767, Math.round(s * 32767))), true);
+    o += 2;
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
 function initMiniGameDemo() {
   const letterTilesEl = document.getElementById("letterTiles");
   if (!letterTilesEl || letterTilesEl.dataset.inited === "1") return;
   letterTilesEl.dataset.inited = "1";
 
+  const HowlCtor = typeof Howl !== "undefined" ? Howl : null;
   const demoLetters = [
-    { label: "A", speak: "A" },
-    { label: "B", speak: "Bê" },
-    { label: "C", speak: "Xê" },
-    { label: "Ca", speak: "Con cá", icon: "🐟" }
+    { label: "A", freq: 440, dur: 0.28 },
+    { label: "B", freq: 494, dur: 0.28 },
+    { label: "C", freq: 523, dur: 0.28 },
+    { label: "Ca", icon: "🐟", freq: 660, dur: 0.38 }
   ];
 
-  function speakVi(text) {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "vi-VN";
-    u.rate = 0.85;
-    window.speechSynthesis.speak(u);
-  }
+  const blobUrls = [];
+  const howls = [];
 
   demoLetters.forEach((item) => {
+    const url = URL.createObjectURL(buildSineWavBlob(item.freq, item.dur));
+    blobUrls.push(url);
+    const h = HowlCtor
+      ? new HowlCtor({ src: [url], format: ["wav"], volume: 0.85, preload: true })
+      : null;
+    howls.push(h);
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "mini-tile";
     btn.textContent = item.icon ? item.icon : item.label;
-    btn.setAttribute("aria-label", item.speak);
-    btn.addEventListener("click", () => speakVi(item.speak));
+    btn.setAttribute("aria-label", item.icon ? "Con ca" : `Chu ${item.label}`);
+    btn.addEventListener("click", () => {
+      if (h) {
+        h.stop();
+        h.play();
+      }
+    });
     letterTilesEl.appendChild(btn);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    howls.forEach((h) => h && h.unload());
+    blobUrls.forEach((u) => URL.revokeObjectURL(u));
   });
 }
 
