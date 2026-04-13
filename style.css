@@ -174,11 +174,15 @@ input {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.12s ease, opacity 0.12s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover {
-  transform: translateY(-1px);
-  opacity: 0.95;
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
 }
 
 .btn-start {
@@ -301,10 +305,14 @@ input {
   place-items: center;
   user-select: none;
   transition: transform 0.1s ease, opacity 0.3s ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.tile:hover {
-  transform: scale(1.06);
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover {
+    transform: scale(1.06);
+  }
 }
 
 .tile.hidden {
@@ -432,10 +440,14 @@ input {
   padding: 0;
   cursor: pointer;
   font: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nav-back:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .nav-back:hover {
+    text-decoration: underline;
+  }
 }
 
 .app-view.section-hidden {
@@ -496,6 +508,10 @@ input {
   text-align: left;
   cursor: pointer;
   width: 100%;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 button.menu-card h2,
@@ -503,10 +519,12 @@ button.menu-card p {
   margin: 0;
 }
 
-.menu-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(147, 197, 253, 0.35);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .menu-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(147, 197, 253, 0.35);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .menu-card--mini {
@@ -731,6 +749,8 @@ button.menu-card p {
   color: #e2e8f0;
   font-size: 26px;
   font-weight: 800;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .snake-tip {
