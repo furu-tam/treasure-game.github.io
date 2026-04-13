@@ -1,0 +1,14 @@
+---
+description: Sau khi sua code trong repo, commit va push len remote
+alwaysApply: true
+---
+
+# Git: commit va push sau chinh sua
+
+- Khi da chinh sua bat ky file nao trong project `treasure-game` (code, HTML, CSS, server, v.v.), **ket thuc phien lam viec bang**:
+  1. `git status` — xem file thay doi
+  2. `git add` cac file lien quan
+  3. `git commit -m "..."` — message ro rang, tieng Viet hoac English
+  4. `git push` len nhanh hien tai (thuong `main`)
+- Khong push neu nguoi dung yeu cau ro rang khong commit/push, hoac khong co thay doi.
+- Neu push that bai (quyen, mang), bao cao loi va goi y nguoi dung xu ly (SSH/token).
