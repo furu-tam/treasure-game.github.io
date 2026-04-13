@@ -3,62 +3,117 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Game Tim Kho Bau</title>
+  <title>Game Hub</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <section class="step-card" id="stepConnect">
-    <h2>Step 1: Setting</h2>
-    <div class="controls">
-      <label>
-        Ten nguoi choi
-        <input id="playerNameInput" type="text" maxlength="24" placeholder="Tam" />
-      </label>
-      <button class="btn btn-start" type="button" id="mpConnectBtn">OK</button>
-      <span class="pill mp-status" id="mpStatusText">Offline</span>
-    </div>
-  </section>
+  <div id="viewMenu" class="app-view page-menu">
+    <header class="menu-header">
+      <h1>Game Hub</h1>
+      <p class="menu-sub">Chon game trong he thong</p>
+    </header>
 
-  <section class="game-step section-hidden" id="stepGame">
-    <h2>Step 2: Choi game</h2>
-    <section class="topbar">
-    <div class="controls">
-      <label id="hostTotalWrap">
-        So nut (N)
-        <input id="totalButtonsInput" type="number" min="2" max="250" value="25" />
-      </label>
-      <label id="hostBombWrap">
-        So boom (X)
-        <input id="bombCountInput" type="number" min="1" max="249" value="5" />
-      </label>
-      <button class="btn btn-start" id="startBtn">Start Game</button>
-      <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
-      <span class="pill section-hidden" id="guestLoadingText">Dang doi chu phong start game...</span>
-    </div>
-    <div class="stats">
-      <span class="pill">Diem: <strong id="scoreText">0</strong></span>
-      <span class="pill">Kho bau tim duoc: <strong id="treasureText">0</strong></span>
-      <span class="pill">Tim (+50): <strong id="heartText">0</strong></span>
-      <span class="pill target-pill">So boom da mo: <strong id="bombText">0</strong></span>
-      <span class="pill">Trang thai: <strong id="stateText">Chua bat dau</strong></span>
-    </div>
+    <main class="menu-grid">
+      <button type="button" class="menu-card menu-card--mini" data-app-view="mini">
+        <span class="menu-card__icon" aria-hidden="true">🧸</span>
+        <h2>Mini Game</h2>
+        <p>Chu cai, hinh anh, am thanh — goi y cho be (dang phat trien).</p>
+      </button>
+      <button type="button" class="menu-card menu-card--treasure" data-app-view="treasure">
+        <span class="menu-card__icon" aria-hidden="true">💎</span>
+        <h2>Treasure Game</h2>
+        <p>Tim kho bau nhieu nguoi choi qua WebSocket.</p>
+      </button>
+    </main>
+
+    <footer class="menu-footer">
+      <span>2 game hien co</span>
+    </footer>
+  </div>
+
+  <div id="viewTreasure" class="app-view section-hidden">
+    <button type="button" class="nav-back" data-app-view="menu">← Trang chu</button>
+
+    <section class="step-card" id="stepConnect">
+      <h2>Step 1: Setting</h2>
+      <div class="controls">
+        <label>
+          Ten nguoi choi
+          <input id="playerNameInput" type="text" maxlength="24" placeholder="Tam" />
+        </label>
+        <button class="btn btn-start" type="button" id="mpConnectBtn">OK</button>
+        <span class="pill mp-status" id="mpStatusText">Offline</span>
+      </div>
     </section>
 
-    <div class="message" id="messageText">
-      Ket noi thanh cong. Chi host moi duoc Start.
-    </div>
-
-    <main class="arena" id="arena">
-      <div class="leaderboard" id="leaderboard"></div>
-      <div class="overlay" id="overlay">
-        <div class="card">
-          <h2 id="resultTitle">Game Over</h2>
-          <p id="resultText"></p>
-          <button class="btn btn-start" id="playAgainBtn">Choi Lai</button>
-        </div>
+    <section class="game-step section-hidden" id="stepGame">
+      <h2>Step 2: Choi game</h2>
+      <section class="topbar">
+      <div class="controls">
+        <label id="hostTotalWrap">
+          So nut (N)
+          <input id="totalButtonsInput" type="number" min="2" max="250" value="25" />
+        </label>
+        <label id="hostBombWrap">
+          So boom (X)
+          <input id="bombCountInput" type="number" min="1" max="249" value="5" />
+        </label>
+        <button class="btn btn-start" id="startBtn">Start Game</button>
+        <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
+        <span class="pill section-hidden" id="guestLoadingText">Dang doi chu phong start game...</span>
       </div>
-    </main>
-  </section>
+      <div class="stats">
+        <span class="pill">Diem: <strong id="scoreText">0</strong></span>
+        <span class="pill">Kho bau tim duoc: <strong id="treasureText">0</strong></span>
+        <span class="pill">Tim (+50): <strong id="heartText">0</strong></span>
+        <span class="pill target-pill">So boom da mo: <strong id="bombText">0</strong></span>
+        <span class="pill">Trang thai: <strong id="stateText">Chua bat dau</strong></span>
+      </div>
+      </section>
+
+      <div class="message" id="messageText">
+        Ket noi thanh cong. Chi host moi duoc Start.
+      </div>
+
+      <main class="arena" id="arena">
+        <div class="leaderboard" id="leaderboard"></div>
+        <div class="overlay" id="overlay">
+          <div class="card">
+            <h2 id="resultTitle">Game Over</h2>
+            <p id="resultText"></p>
+            <button class="btn btn-start" id="playAgainBtn">Choi Lai</button>
+          </div>
+        </div>
+      </main>
+    </section>
+  </div>
+
+  <div id="viewMini" class="app-view page-menu page-mini section-hidden">
+    <button type="button" class="nav-back" data-app-view="menu">← Trang chu</button>
+
+    <header class="menu-header">
+      <h1>Mini Game</h1>
+      <p class="menu-sub">Ban thu nghiem: bam nut de nghe (giong may TTS mac dinh — chua phai mien Nam).</p>
+    </header>
+
+    <section class="mini-demo">
+      <h2 class="mini-demo__title">Thu chu cai</h2>
+      <div class="mini-tiles" id="letterTiles"></div>
+    </section>
+
+    <section class="mini-demo mini-hint">
+      <h2 class="mini-demo__title">Huong phat trien ky thuat</h2>
+      <ul class="tech-list">
+        <li><strong>Am thanh mien Nam:</strong> ghi am giong that (MP3/WebM), phat bang <code>HTMLAudioElement</code> hoac <a href="https://howlerjs.com/" rel="noopener noreferrer">Howler.js</a> (preload, gapless, mobile).</li>
+        <li><strong>Du lieu noi dung:</strong> file JSON (chu cai, tu, URL anh, URL am thanh) de them sua khong can doi code.</li>
+        <li><strong>Hinh anh:</strong> SVG/PNG to, nut to (toi thieu ~48px cham), vung bam rong — phu hop be ~15 thang.</li>
+        <li><strong>Random:</strong> chon ngau nhien N muc tu JSON, tranh trung trong mot vong; co the gioi han bo chu can hoc.</li>
+        <li><strong>TTS du phong:</strong> <code>speechSynthesis</code> + <code>vi-VN</code> khi chua co file ghi am (chat luong &amp; giong vung mien khong on dinh).</li>
+        <li><strong>PWA / offline:</strong> Service Worker cache anh + am de choi khong mang.</li>
+        <li><strong>Khuyen nghi:</strong> am luong vua, tranh nhap nhay manh; cha me giam sat khi dung tai nghe.</li>
+      </ul>
+    </section>
+  </div>
 
   <script src="script.js"></script>
 </body>

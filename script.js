@@ -586,6 +586,60 @@ window.addEventListener("resize", () => {
   if (gameActive && !mpConnected()) randomizeMap();
 });
 
+function initMiniGameDemo() {
+  const letterTilesEl = document.getElementById("letterTiles");
+  if (!letterTilesEl || letterTilesEl.dataset.inited === "1") return;
+  letterTilesEl.dataset.inited = "1";
+
+  const demoLetters = [
+    { label: "A", speak: "A" },
+    { label: "B", speak: "Bê" },
+    { label: "C", speak: "Xê" },
+    { label: "Ca", speak: "Con cá", icon: "🐟" }
+  ];
+
+  function speakVi(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "vi-VN";
+    u.rate = 0.85;
+    window.speechSynthesis.speak(u);
+  }
+
+  demoLetters.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mini-tile";
+    btn.textContent = item.icon ? item.icon : item.label;
+    btn.setAttribute("aria-label", item.speak);
+    btn.addEventListener("click", () => speakVi(item.speak));
+    letterTilesEl.appendChild(btn);
+  });
+}
+
+function setupAppNavigation() {
+  const viewMenu = document.getElementById("viewMenu");
+  const viewTreasure = document.getElementById("viewTreasure");
+  const viewMini = document.getElementById("viewMini");
+  if (!viewMenu || !viewTreasure || !viewMini) return;
+
+  function showAppView(name) {
+    viewMenu.classList.toggle("section-hidden", name !== "menu");
+    viewTreasure.classList.toggle("section-hidden", name !== "treasure");
+    viewMini.classList.toggle("section-hidden", name !== "mini");
+    if (name === "mini") initMiniGameDemo();
+  }
+
+  document.querySelectorAll("[data-app-view]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const v = el.getAttribute("data-app-view");
+      if (v === "menu" || v === "treasure" || v === "mini") showAppView(v);
+    });
+  });
+}
+
+setupAppNavigation();
 updateHud();
 applyRandomBackground();
 syncTileSizeForScreen();
