@@ -18,9 +18,14 @@ const resetBtn = document.getElementById("resetBtn");
 const scoreText = document.getElementById("scoreText");
 const treasureText = document.getElementById("treasureText");
 const heartText = document.getElementById("heartText");
+const fishText = document.getElementById("fishText");
+const poopText = document.getElementById("poopText");
+const crabText = document.getElementById("crabText");
+const crownText = document.getElementById("crownText");
 const bombText = document.getElementById("bombText");
 const stateText = document.getElementById("stateText");
 const messageText = document.getElementById("messageText");
+const randomCountsText = document.getElementById("randomCountsText");
 
 const playerNameInput = document.getElementById("playerNameInput");
 const mpConnectBtn = document.getElementById("mpConnectBtn");
@@ -29,12 +34,20 @@ const mpStatusText = document.getElementById("mpStatusText");
 const WS_SERVER_URL = "wss://treasure-game-github-io.onrender.com";
 const FIXED_ROOM_ID = "main";
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
+const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
 let gameActive = false;
 let cells = [];
 let bombSet = new Set();
-let treasureSet = new Set();
-let heartSet = new Set();
+let roleSets = {
+  treasure: new Set(),
+  heart: new Set(),
+  fish: new Set(),
+  poop: new Set(),
+  crab: new Set(),
+  crown: new Set()
+};
+let currentRandomCounts = { bomb: 0, treasure: 0, heart: 0, fish: 0, poop: 0, crab: 0, crown: 0 };
 let hostArenaWidth = 1;
 let hostArenaHeight = 1;
 let applyingRemoteState = false;
@@ -57,7 +70,7 @@ function randInt(min, max) {
 function ensurePlayer(id, name = "Player") {
   if (!id) return;
   if (!playerStats[id]) {
-    playerStats[id] = { name, score: 0, treasure: 0, heart: 0, bombHit: 0 };
+    playerStats[id] = { name, score: 0, treasure: 0, heart: 0, fish: 0, poop: 0, crab: 0, crown: 0, bombHit: 0 };
   } else if (name) {
     playerStats[id].name = name;
   }
@@ -74,7 +87,7 @@ function mergePeersRoster(peers) {
 }
 
 function myStat() {
-  return playerStats[mpClientId] || { score: 0, treasure: 0, heart: 0, bombHit: 0 };
+  return playerStats[mpClientId] || { score: 0, treasure: 0, heart: 0, fish: 0, poop: 0, crab: 0, crown: 0, bombHit: 0 };
 }
 
 function renderLeaderboard() {
@@ -86,10 +99,17 @@ function renderLeaderboard() {
     .map(([id, p], idx) => {
       const rank = idx + 1;
       const me = id === mpClientId ? " (ban)" : "";
-      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | ❤️${p.heart ?? 0} | 💣${p.bombHit}</strong></div>`;
+      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | ❤️${p.heart ?? 0} | 🐟${p.fish ?? 0} | 💩${p.poop ?? 0} | 🦀${p.crab ?? 0} | 👑${p.crown ?? 0} | 💣${p.bombHit}</strong></div>`;
     })
     .join("");
   leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
+}
+
+function renderRandomCounts() {
+  if (!randomCountsText) return;
+  randomCountsText.textContent =
+    `Random map: 💣${currentRandomCounts.bomb} | 💎${currentRandomCounts.treasure} | ❤️${currentRandomCounts.heart} | ` +
+    `🐟${currentRandomCounts.fish} | 💩${currentRandomCounts.poop} | 🦀${currentRandomCounts.crab} | 👑${currentRandomCounts.crown}`;
 }
 
 function updateHud() {
@@ -97,8 +117,13 @@ function updateHud() {
   scoreText.textContent = String(me.score);
   treasureText.textContent = String(me.treasure);
   heartText.textContent = String(me.heart ?? 0);
+  fishText.textContent = String(me.fish ?? 0);
+  poopText.textContent = String(me.poop ?? 0);
+  crabText.textContent = String(me.crab ?? 0);
+  crownText.textContent = String(me.crown ?? 0);
   bombText.textContent = String(me.bombHit);
   stateText.textContent = gameActive ? "Dang choi" : "Da dung";
+  renderRandomCounts();
   renderLeaderboard();
 }
 
@@ -176,27 +201,52 @@ function pickRoles(total, bombCount) {
   while (bombs.size < bombCount) bombs.add(randInt(0, total - 1));
   bombSet = bombs;
 
-  const maxTreasure = Math.max(1, Math.min(6, total - bombCount));
-  const treasureCount = randInt(1, maxTreasure);
-  const treasures = new Set();
-  while (treasures.size < treasureCount) {
-    const idx = randInt(0, total - 1);
-    if (!bombs.has(idx)) treasures.add(idx);
-  }
-  treasureSet = treasures;
+  roleSets = {
+    treasure: new Set(),
+    heart: new Set(),
+    fish: new Set(),
+    poop: new Set(),
+    crab: new Set(),
+    crown: new Set()
+  };
 
-  const heartCandidates = [];
+  const available = [];
   for (let i = 0; i < total; i += 1) {
-    if (!bombs.has(i) && !treasures.has(i)) heartCandidates.push(i);
+    if (!bombs.has(i)) available.push(i);
   }
-  const hearts = new Set();
-  if (heartCandidates.length > 0) {
-    const nHeart = randInt(1, Math.min(4, heartCandidates.length));
-    while (hearts.size < nHeart) {
-      hearts.add(heartCandidates[randInt(0, heartCandidates.length - 1)]);
+
+  const takeRandom = (count) => {
+    const picked = [];
+    for (let i = 0; i < count && available.length > 0; i += 1) {
+      const idx = randInt(0, available.length - 1);
+      picked.push(available[idx]);
+      available.splice(idx, 1);
     }
-  }
-  heartSet = hearts;
+    return picked;
+  };
+
+  const assignRole = (role, minCount, maxCount) => {
+    if (available.length <= 0) return;
+    const n = randInt(Math.min(minCount, available.length), Math.min(maxCount, available.length));
+    takeRandom(n).forEach((x) => roleSets[role].add(x));
+  };
+
+  assignRole("treasure", 1, 6);
+  assignRole("heart", 1, 4);
+  assignRole("fish", 1, 4);
+  assignRole("poop", 1, 3);
+  assignRole("crab", 1, 3);
+  assignRole("crown", 1, 2);
+
+  currentRandomCounts = {
+    bomb: bombSet.size,
+    treasure: roleSets.treasure.size,
+    heart: roleSets.heart.size,
+    fish: roleSets.fish.size,
+    poop: roleSets.poop.size,
+    crab: roleSets.crab.size,
+    crown: roleSets.crown.size
+  };
 }
 
 function createShuffledNumbers(total) {
@@ -209,7 +259,7 @@ function createShuffledNumbers(total) {
 }
 
 function setupHiddenTile(btn, order, role) {
-  btn.classList.remove("safe", "treasure", "bomb", "heart", "vanished", "vanish");
+  btn.classList.remove("safe", "treasure", "bomb", "heart", "fish", "poop", "crab", "crown", "vanished", "vanish");
   btn.classList.add("hidden");
   btn.dataset.revealed = "false";
   btn.dataset.role = role;
@@ -225,7 +275,7 @@ function applyVanishedSafe(btn) {
 
 function revealTile(btn, role, opts = {}) {
   const { instant = false, onDone } = opts;
-  btn.classList.remove("hidden", "safe", "treasure", "bomb", "heart", "vanished", "vanish");
+  btn.classList.remove("hidden", "safe", "treasure", "bomb", "heart", "fish", "poop", "crab", "crown", "vanished", "vanish");
   if (role === "treasure") {
     btn.classList.add("treasure");
     btn.textContent = "💎";
@@ -237,6 +287,22 @@ function revealTile(btn, role, opts = {}) {
   } else if (role === "heart") {
     btn.classList.add("heart");
     btn.textContent = "❤️";
+    if (onDone) onDone();
+  } else if (role === "fish") {
+    btn.classList.add("fish");
+    btn.textContent = "🐟";
+    if (onDone) onDone();
+  } else if (role === "poop") {
+    btn.classList.add("poop");
+    btn.textContent = "💩";
+    if (onDone) onDone();
+  } else if (role === "crab") {
+    btn.classList.add("crab");
+    btn.textContent = "🦀";
+    if (onDone) onDone();
+  } else if (role === "crown") {
+    btn.classList.add("crown");
+    btn.textContent = "👑";
     if (onDone) onDone();
   } else {
     btn.classList.add("safe");
@@ -296,6 +362,7 @@ function broadcastFullState() {
       totalInput: totalButtonsInput.value,
       bombInput: bombCountInput.value,
       playerStats,
+      randomCounts: currentRandomCounts,
       tiles
     },
     { excludeSelf: true }
@@ -316,10 +383,23 @@ function applyFullState(payload) {
         score: v.score,
         treasure: v.treasure,
         heart: v.heart ?? 0,
+        fish: v.fish ?? 0,
+        poop: v.poop ?? 0,
+        crab: v.crab ?? 0,
+        crown: v.crown ?? 0,
         bombHit: v.bombHit || 0
       };
     });
     ensurePlayer(mpClientId, myPlayerName);
+    currentRandomCounts = {
+      bomb: Number(payload?.randomCounts?.bomb ?? 0),
+      treasure: Number(payload?.randomCounts?.treasure ?? 0),
+      heart: Number(payload?.randomCounts?.heart ?? 0),
+      fish: Number(payload?.randomCounts?.fish ?? 0),
+      poop: Number(payload?.randomCounts?.poop ?? 0),
+      crab: Number(payload?.randomCounts?.crab ?? 0),
+      crown: Number(payload?.randomCounts?.crown ?? 0)
+    };
 
     document.body.classList.remove(...BACKGROUND_THEMES);
     document.body.classList.add(BACKGROUND_THEMES.includes(payload.theme) ? payload.theme : "bg-ocean");
@@ -378,12 +458,11 @@ function updatePlayerScore(playerId, role) {
     return;
   }
   p.score += 1;
-  if (role === "treasure") {
-    p.score += 10;
-    p.treasure += 1;
-  } else if (role === "heart") {
-    p.score += 50;
-    p.heart = (p.heart || 0) + 1;
+  if (ROLE_EXTRA_SCORE[role] !== undefined) {
+    p.score += ROLE_EXTRA_SCORE[role];
+  }
+  if (role === "treasure" || role === "heart" || role === "fish" || role === "poop" || role === "crab" || role === "crown") {
+    p[role] = (p[role] || 0) + 1;
   }
 }
 
@@ -419,6 +498,14 @@ function handleTileClick(btn, actorId = mpClientId) {
       messageText.textContent = "Tim thay kho bau! +1 (o dung) +10 = +11 diem.";
     } else if (role === "heart") {
       messageText.textContent = "Tim thay tim! +1 (o dung) +50 = +51 diem.";
+    } else if (role === "fish") {
+      messageText.textContent = "Tim thay ca! +1 (o dung) +7 = +8 diem.";
+    } else if (role === "poop") {
+      messageText.textContent = "Dap trung shit! +1 (o dung) -15 = -14 diem.";
+    } else if (role === "crab") {
+      messageText.textContent = "Tim thay cua! +1 (o dung) +5 = +6 diem.";
+    } else if (role === "crown") {
+      messageText.textContent = "Nhat duoc vuong mien! +1 (o dung) +30 = +31 diem.";
     } else {
       messageText.textContent = "O trong. +1 diem (o dung).";
     }
@@ -450,8 +537,12 @@ function randomizeMap() {
     btn.style.left = `${positions[i].x}px`;
     btn.style.top = `${positions[i].y}px`;
     let role = "safe";
-    if (treasureSet.has(i)) role = "treasure";
-    else if (heartSet.has(i)) role = "heart";
+    if (roleSets.treasure.has(i)) role = "treasure";
+    else if (roleSets.heart.has(i)) role = "heart";
+    else if (roleSets.fish.has(i)) role = "fish";
+    else if (roleSets.poop.has(i)) role = "poop";
+    else if (roleSets.crab.has(i)) role = "crab";
+    else if (roleSets.crown.has(i)) role = "crown";
     else if (bombSet.has(i)) role = "bomb";
     setupHiddenTile(btn, numbers[i], role);
     btn.addEventListener("click", () => handleTileClick(btn));
@@ -472,6 +563,10 @@ function startGame(resetPoint = false) {
       p.score = 0;
       p.treasure = 0;
       p.heart = 0;
+      p.fish = 0;
+      p.poop = 0;
+      p.crab = 0;
+      p.crown = 0;
       p.bombHit = 0;
     });
   }
@@ -1702,6 +1797,8 @@ function setupAppNavigation() {
         showAppView(v);
     });
   });
+
+  showAppView("treasure");
 }
 
 window.addEventListener("beforeunload", () => miniAudioDisposeAll());

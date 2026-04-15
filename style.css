@@ -361,6 +361,23 @@ input {
   font-size: 28px;
 }
 
+.tile.fish {
+  background: linear-gradient(145deg, #67e8f9, #0369a1);
+}
+
+.tile.poop {
+  background: linear-gradient(145deg, #d4a373, #78350f);
+}
+
+.tile.crab {
+  background: linear-gradient(145deg, #fca5a5, #b91c1c);
+}
+
+.tile.crown {
+  background: linear-gradient(145deg, #fde047, #ca8a04);
+  color: #3f2a00;
+}
+
 .tile.vanished {
   opacity: 0;
   visibility: hidden;
