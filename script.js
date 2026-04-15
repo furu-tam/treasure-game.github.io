@@ -112,17 +112,22 @@ function renderRandomCounts() {
     `🐟${currentRandomCounts.fish} | 💩${currentRandomCounts.poop} | 🦀${currentRandomCounts.crab} | 👑${currentRandomCounts.crown}`;
 }
 
+function setText(el, value) {
+  if (!el) return;
+  el.textContent = value;
+}
+
 function updateHud() {
   const me = myStat();
-  scoreText.textContent = String(me.score);
-  treasureText.textContent = String(me.treasure);
-  heartText.textContent = String(me.heart ?? 0);
-  fishText.textContent = String(me.fish ?? 0);
-  poopText.textContent = String(me.poop ?? 0);
-  crabText.textContent = String(me.crab ?? 0);
-  crownText.textContent = String(me.crown ?? 0);
-  bombText.textContent = String(me.bombHit);
-  stateText.textContent = gameActive ? "Dang choi" : "Da dung";
+  setText(scoreText, String(me.score));
+  setText(treasureText, String(me.treasure));
+  setText(heartText, String(me.heart ?? 0));
+  setText(fishText, String(me.fish ?? 0));
+  setText(poopText, String(me.poop ?? 0));
+  setText(crabText, String(me.crab ?? 0));
+  setText(crownText, String(me.crown ?? 0));
+  setText(bombText, String(me.bombHit));
+  setText(stateText, gameActive ? "Dang choi" : "Da dung");
   renderRandomCounts();
   renderLeaderboard();
 }
