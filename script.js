@@ -8,6 +8,8 @@ const stepConnect = document.getElementById("stepConnect");
 const stepGame = document.getElementById("stepGame");
 const hostTotalWrap = document.getElementById("hostTotalWrap");
 const hostBombWrap = document.getElementById("hostBombWrap");
+const hostTileFaceWrap = document.getElementById("hostTileFaceWrap");
+const tileFaceSelect = document.getElementById("tileFaceSelect");
 const guestLoadingText = document.getElementById("guestLoadingText");
 
 const totalButtonsInput = document.getElementById("totalButtonsInput");
@@ -69,6 +71,19 @@ function playWinSound() {
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
+const TILE_FACE_IDS = ["rock", "grass", "tree", "cloud"];
+const TILE_FACE_EMOJI = { rock: "🪨", grass: "🌿", tree: "🌳", cloud: "☁️" };
+let currentTileFace = "rock";
+
+function normalizeTileFace(v) {
+  const s = String(v || "").toLowerCase();
+  return TILE_FACE_IDS.includes(s) ? s : "rock";
+}
+
+function tileFaceEmoji(face) {
+  return TILE_FACE_EMOJI[normalizeTileFace(face)] ?? TILE_FACE_EMOJI.rock;
+}
+
 let gameActive = false;
 let cells = [];
 let bombSet = new Set();
@@ -91,6 +106,8 @@ let mpRoomId = "";
 let isRoomHost = false;
 let myPlayerName = "";
 const playerStats = {};
+
+if (tileFaceSelect) currentTileFace = normalizeTileFace(tileFaceSelect.value);
 
 function mpConnected() {
   return mpSocket !== null && mpSocket.readyState === WebSocket.OPEN;
@@ -169,6 +186,7 @@ function applyHostPermissions() {
   const host = isRoomHost;
   hostTotalWrap.classList.toggle("section-hidden", !host);
   hostBombWrap.classList.toggle("section-hidden", !host);
+  if (hostTileFaceWrap) hostTileFaceWrap.classList.toggle("section-hidden", !host);
   startBtn.classList.toggle("section-hidden", !host);
   resetBtn.classList.toggle("section-hidden", !host);
   guestLoadingText.classList.toggle("section-hidden", host);
@@ -302,7 +320,9 @@ function setupHiddenTile(btn, order, role) {
   btn.dataset.revealed = "false";
   btn.dataset.role = role;
   btn.dataset.order = String(order);
-  btn.textContent = String(order);
+  const emoji = tileFaceEmoji(currentTileFace);
+  btn.innerHTML = `<span class="tile-face-emoji" aria-hidden="true">${emoji}</span><span class="tile-face-order">${order}</span>`;
+  btn.setAttribute("aria-label", `O kin so ${order}`);
 }
 
 function applyVanishedSafe(btn) {
@@ -401,6 +421,7 @@ function broadcastFullState() {
       bombInput: bombCountInput.value,
       playerStats,
       randomCounts: currentRandomCounts,
+      tileFace: currentTileFace,
       tiles
     },
     { excludeSelf: true }
@@ -413,6 +434,9 @@ function applyFullState(payload) {
     gameActive = Boolean(payload.gameActive);
     totalButtonsInput.value = String(payload.totalInput ?? totalButtonsInput.value);
     bombCountInput.value = String(payload.bombInput ?? bombCountInput.value);
+
+    currentTileFace = normalizeTileFace(payload.tileFace);
+    if (tileFaceSelect) tileFaceSelect.value = currentTileFace;
 
     Object.keys(playerStats).forEach((k) => delete playerStats[k]);
     Object.entries(payload.playerStats || {}).forEach(([k, v]) => {
@@ -564,6 +588,7 @@ function handleTileClick(btn, actorId = mpClientId) {
 
 function randomizeMap() {
   const { total, bombCount } = normalizeConfig();
+  if (tileFaceSelect) currentTileFace = normalizeTileFace(tileFaceSelect.value);
   const positions = getRandomPositions(total);
   const realTotal = positions.length;
   const realBomb = Math.min(bombCount, Math.max(1, realTotal - 1));
