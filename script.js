@@ -208,6 +208,24 @@ function getTileSize() {
   return Number.isFinite(v) ? v : 64;
 }
 
+function tileFitsOutsideLeaderboard(x, y, tileSize, margin = 10) {
+  const lb = document.getElementById("leaderboard");
+  if (!lb || !arena) return true;
+  const ar = arena.getBoundingClientRect();
+  const br = lb.getBoundingClientRect();
+  if (br.width < 8 || br.height < 8) return true;
+  const pad = margin;
+  const exL = br.left - ar.left - pad;
+  const exT = br.top - ar.top - pad;
+  const exR = br.right - ar.left + pad;
+  const exB = br.bottom - ar.top + pad;
+  const tL = x;
+  const tT = y;
+  const tR = x + tileSize;
+  const tB = y + tileSize;
+  return tR <= exL || tL >= exR || tB <= exT || tT >= exB;
+}
+
 function clearArenaButtons() {
   arena.querySelectorAll(".tile").forEach((btn) => btn.remove());
 }
@@ -243,7 +261,19 @@ function getRandomPositions(total) {
   const offsetX = Math.max(padding, Math.floor((arenaWidth - cols * step + minGap) / 2));
   const offsetY = Math.max(padding, Math.floor((arenaHeight - rows * step + minGap) / 2));
   for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) grid.push({ x: offsetX + c * step, y: offsetY + r * step });
+    for (let c = 0; c < cols; c += 1) {
+      const x = offsetX + c * step;
+      const y = offsetY + r * step;
+      if (tileFitsOutsideLeaderboard(x, y, size)) grid.push({ x, y });
+    }
+  }
+  if (grid.length < finalTotal) {
+    grid.length = 0;
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        grid.push({ x: offsetX + c * step, y: offsetY + r * step });
+      }
+    }
   }
   for (let i = grid.length - 1; i > 0; i -= 1) {
     const j = randInt(0, i);
