@@ -33,6 +33,14 @@ const mpStatusText = document.getElementById("mpStatusText");
 
 const WS_SERVER_URL = "wss://treasure-game-github-io.onrender.com";
 const FIXED_ROOM_ID = "main";
+const TREASURE_SFX_URL = "sound/treasure.mp3";
+
+let treasureSfxAudio = null;
+function playTreasureSound() {
+  if (!treasureSfxAudio) treasureSfxAudio = new Audio(TREASURE_SFX_URL);
+  treasureSfxAudio.currentTime = 0;
+  void treasureSfxAudio.play().catch(() => {});
+}
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
@@ -99,7 +107,7 @@ function renderLeaderboard() {
     .map(([id, p], idx) => {
       const rank = idx + 1;
       const me = id === mpClientId ? " (ban)" : "";
-      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} | 💎${p.treasure} | ❤️${p.heart ?? 0} | 🐟${p.fish ?? 0} | 💩${p.poop ?? 0} | 🦀${p.crab ?? 0} | 👑${p.crown ?? 0} | 💣${p.bombHit}</strong></div>`;
+      return `<div class="leaderboard-item"><span class="lb-rank">#${rank}</span><span class="lb-name">${p.name}${me}</span><strong>${p.score} diem | 💣${p.bombHit}</strong></div>`;
     })
     .join("");
   leaderboard.innerHTML = `<h3>Bang diem phong</h3>${rows || "<div class='leaderboard-item'>Chua co nguoi choi</div>"}`;
@@ -480,12 +488,14 @@ function handleTileClick(btn, actorId = mpClientId) {
   if (btn.dataset.revealed === "true") return;
 
   if (mpConnected() && !isRoomHost) {
+    if (btn.dataset.role === "treasure") playTreasureSound();
     sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
     return;
   }
 
   const role = btn.dataset.role;
   btn.dataset.revealed = "true";
+  if (role === "treasure") playTreasureSound();
 
   const afterScoreAndMessage = () => {
     updatePlayerScore(actorId, role);
