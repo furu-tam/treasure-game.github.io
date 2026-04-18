@@ -67,15 +67,6 @@
           So boom (X)
           <input id="bombCountInput" type="number" min="1" max="249" value="5" />
         </label>
-        <label id="hostTileFaceWrap">
-          Bieu tuong o kin
-          <select id="tileFaceSelect" aria-label="Chon bieu tuong o kin truoc khi start">
-            <option value="rock">Cuc da</option>
-            <option value="grass">Dam co</option>
-            <option value="tree">Cai cay</option>
-            <option value="cloud">Dam may</option>
-          </select>
-        </label>
         <button class="btn btn-start" id="startBtn">Start Game</button>
         <button class="btn btn-reset" id="resetBtn">Reset Diem</button>
         <span class="pill section-hidden" id="guestLoadingText">Dang doi chu phong start game...</span>
@@ -98,6 +89,10 @@
       </div>
       <div class="message" id="randomCountsText">
         Chua random map.
+      </div>
+
+      <div class="target-number-hud" id="targetNumberHud" hidden aria-live="polite">
+        <span class="target-number-hud__value" id="targetNumberValue"></span>
       </div>
 
       <main class="arena" id="arena">

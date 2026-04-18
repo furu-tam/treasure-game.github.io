@@ -8,9 +8,9 @@ const stepConnect = document.getElementById("stepConnect");
 const stepGame = document.getElementById("stepGame");
 const hostTotalWrap = document.getElementById("hostTotalWrap");
 const hostBombWrap = document.getElementById("hostBombWrap");
-const hostTileFaceWrap = document.getElementById("hostTileFaceWrap");
-const tileFaceSelect = document.getElementById("tileFaceSelect");
 const guestLoadingText = document.getElementById("guestLoadingText");
+const targetNumberHud = document.getElementById("targetNumberHud");
+const targetNumberValue = document.getElementById("targetNumberValue");
 
 const totalButtonsInput = document.getElementById("totalButtonsInput");
 const bombCountInput = document.getElementById("bombCountInput");
@@ -71,20 +71,8 @@ function playWinSound() {
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
-const TILE_FACE_IDS = ["rock", "grass", "tree", "cloud"];
-const TILE_FACE_EMOJI = { rock: "🪨", grass: "🌿", tree: "🌳", cloud: "☁️" };
-let currentTileFace = "rock";
-
-function normalizeTileFace(v) {
-  const s = String(v || "").toLowerCase();
-  return TILE_FACE_IDS.includes(s) ? s : "rock";
-}
-
-function tileFaceEmoji(face) {
-  return TILE_FACE_EMOJI[normalizeTileFace(face)] ?? TILE_FACE_EMOJI.rock;
-}
-
 let gameActive = false;
+let currentTarget = null;
 let cells = [];
 let bombSet = new Set();
 let roleSets = {
@@ -107,7 +95,30 @@ let isRoomHost = false;
 let myPlayerName = "";
 const playerStats = {};
 
-if (tileFaceSelect) currentTileFace = normalizeTileFace(tileFaceSelect.value);
+function pickNewTarget() {
+  const hiddenOrders = cells
+    .filter((b) => b.dataset.revealed !== "true")
+    .map((b) => Number(b.dataset.order))
+    .filter((n) => Number.isFinite(n));
+  if (!hiddenOrders.length) {
+    currentTarget = null;
+    renderTargetHud();
+    return;
+  }
+  currentTarget = hiddenOrders[randInt(0, hiddenOrders.length - 1)];
+  renderTargetHud();
+}
+
+function renderTargetHud() {
+  if (!targetNumberHud || !targetNumberValue) return;
+  if (gameActive && currentTarget != null && Number.isFinite(currentTarget)) {
+    targetNumberValue.textContent = String(currentTarget);
+    targetNumberHud.removeAttribute("hidden");
+  } else {
+    targetNumberValue.textContent = "";
+    targetNumberHud.setAttribute("hidden", "");
+  }
+}
 
 function mpConnected() {
   return mpSocket !== null && mpSocket.readyState === WebSocket.OPEN;
@@ -186,7 +197,6 @@ function applyHostPermissions() {
   const host = isRoomHost;
   hostTotalWrap.classList.toggle("section-hidden", !host);
   hostBombWrap.classList.toggle("section-hidden", !host);
-  if (hostTileFaceWrap) hostTileFaceWrap.classList.toggle("section-hidden", !host);
   startBtn.classList.toggle("section-hidden", !host);
   resetBtn.classList.toggle("section-hidden", !host);
   guestLoadingText.classList.toggle("section-hidden", host);
@@ -350,8 +360,7 @@ function setupHiddenTile(btn, order, role) {
   btn.dataset.revealed = "false";
   btn.dataset.role = role;
   btn.dataset.order = String(order);
-  const emoji = tileFaceEmoji(currentTileFace);
-  btn.innerHTML = `<span class="tile-face-emoji" aria-hidden="true">${emoji}</span><span class="tile-face-order">${order}</span>`;
+  btn.textContent = String(order);
   btn.setAttribute("aria-label", `O kin so ${order}`);
 }
 
@@ -451,7 +460,7 @@ function broadcastFullState() {
       bombInput: bombCountInput.value,
       playerStats,
       randomCounts: currentRandomCounts,
-      tileFace: currentTileFace,
+      currentTarget,
       tiles
     },
     { excludeSelf: true }
@@ -465,8 +474,11 @@ function applyFullState(payload) {
     totalButtonsInput.value = String(payload.totalInput ?? totalButtonsInput.value);
     bombCountInput.value = String(payload.bombInput ?? bombCountInput.value);
 
-    currentTileFace = normalizeTileFace(payload.tileFace);
-    if (tileFaceSelect) tileFaceSelect.value = currentTileFace;
+    const rawTarget = payload.currentTarget;
+    currentTarget =
+      rawTarget !== undefined && rawTarget !== null && String(rawTarget) !== "" && Number.isFinite(Number(rawTarget))
+        ? Number(rawTarget)
+        : null;
 
     Object.keys(playerStats).forEach((k) => delete playerStats[k]);
     Object.entries(payload.playerStats || {}).forEach(([k, v]) => {
@@ -525,6 +537,7 @@ function applyFullState(payload) {
       arena.appendChild(btn);
     });
     updateHud();
+    renderTargetHud();
   } finally {
     applyingRemoteState = false;
   }
@@ -532,6 +545,8 @@ function applyFullState(payload) {
 
 function endGame() {
   gameActive = false;
+  currentTarget = null;
+  renderTargetHud();
   updateHud();
   resultTitle.textContent = "Ket thuc";
   resultText.innerHTML = "Khong con o nao de mo.";
@@ -566,12 +581,18 @@ function handleTileClick(btn, actorId = mpClientId) {
   if (!gameActive) return;
   if (btn.dataset.revealed === "true") return;
 
+  const orderNum = Number(btn.dataset.order);
+  if (!Number.isFinite(currentTarget) || orderNum !== currentTarget) {
+    messageText.textContent = `Sai! Chi duoc mo o so ${currentTarget}.`;
+    return;
+  }
+
   if (mpConnected() && !isRoomHost) {
     if (btn.dataset.role === "treasure") playTreasureSound();
     else if (btn.dataset.role === "bomb") playBoomSound();
     else if (btn.dataset.role === "poop") playShitSound();
     else if (btn.dataset.role === "crown") playWinSound();
-    sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
+    sendRoomMsg({ kind: "guest_click", order: orderNum }, { toHostOnly: true });
     return;
   }
 
@@ -610,7 +631,10 @@ function handleTileClick(btn, actorId = mpClientId) {
       messageText.textContent = "O trong. +1 diem (o dung).";
     }
 
-    if (isRoomHost) broadcastFullState();
+    if (!mpConnected() || isRoomHost) {
+      pickNewTarget();
+    }
+    if (mpConnected() && isRoomHost) broadcastFullState();
   };
 
   revealTile(btn, role, { onDone: afterScoreAndMessage });
@@ -618,7 +642,6 @@ function handleTileClick(btn, actorId = mpClientId) {
 
 function randomizeMap() {
   const { total, bombCount } = normalizeConfig();
-  if (tileFaceSelect) currentTileFace = normalizeTileFace(tileFaceSelect.value);
   const positions = getRandomPositions(total);
   const realTotal = positions.length;
   const realBomb = Math.min(bombCount, Math.max(1, realTotal - 1));
@@ -651,7 +674,10 @@ function randomizeMap() {
     arena.appendChild(btn);
   }
   updateHud();
-  messageText.textContent = "Bat dau! Click tu do de mo o.";
+  messageText.textContent = "Bat dau! Mo dung o co SO trung voi so do o giua man hinh.";
+  if (!mpConnected() || isRoomHost) {
+    pickNewTarget();
+  }
 }
 
 function startGame(resetPoint = false) {
@@ -756,9 +782,9 @@ function connectMultiplayer() {
       } else if (data.kind === "need_state" && isRoomHost) {
         broadcastFullState();
       } else if (data.kind === "guest_click" && isRoomHost) {
-        const btn = cells.find(
-          (x) => Number(x.dataset.order) === Number(data.order) && x.dataset.revealed !== "true"
-        );
+        const ord = Number(data.order);
+        if (!Number.isFinite(ord) || ord !== currentTarget) return;
+        const btn = cells.find((x) => Number(x.dataset.order) === ord && x.dataset.revealed !== "true");
         if (btn) handleTileClick(btn, msg.from);
       } else if (data.kind === "chicken_start" && isRoomHost) {
         chickenStartGame();
