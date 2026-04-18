@@ -6,6 +6,7 @@ const playAgainBtn = document.getElementById("playAgainBtn");
 const leaderboard = document.getElementById("leaderboard");
 const stepConnect = document.getElementById("stepConnect");
 const stepGame = document.getElementById("stepGame");
+const treasureTopbar = document.getElementById("treasureTopbar");
 const hostTotalWrap = document.getElementById("hostTotalWrap");
 const hostBombWrap = document.getElementById("hostBombWrap");
 const guestLoadingText = document.getElementById("guestLoadingText");
@@ -195,6 +196,7 @@ function updateHud() {
 
 function applyHostPermissions() {
   const host = isRoomHost;
+  if (treasureTopbar) treasureTopbar.classList.toggle("section-hidden", !host);
   hostTotalWrap.classList.toggle("section-hidden", !host);
   hostBombWrap.classList.toggle("section-hidden", !host);
   startBtn.classList.toggle("section-hidden", !host);
