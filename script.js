@@ -41,6 +41,15 @@ function playTreasureSound() {
   treasureSfxAudio.currentTime = 0;
   void treasureSfxAudio.play().catch(() => {});
 }
+
+const BOOM_SFX_URL = "sound/boom.mp3";
+let boomSfxAudio = null;
+function playBoomSound() {
+  if (!boomSfxAudio) boomSfxAudio = new Audio(BOOM_SFX_URL);
+  boomSfxAudio.currentTime = 0;
+  void boomSfxAudio.play().catch(() => {});
+}
+
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
@@ -489,6 +498,7 @@ function handleTileClick(btn, actorId = mpClientId) {
 
   if (mpConnected() && !isRoomHost) {
     if (btn.dataset.role === "treasure") playTreasureSound();
+    else if (btn.dataset.role === "bomb") playBoomSound();
     sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
     return;
   }
@@ -496,6 +506,7 @@ function handleTileClick(btn, actorId = mpClientId) {
   const role = btn.dataset.role;
   btn.dataset.revealed = "true";
   if (role === "treasure") playTreasureSound();
+  else if (role === "bomb") playBoomSound();
 
   const afterScoreAndMessage = () => {
     updatePlayerScore(actorId, role);
