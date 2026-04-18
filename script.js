@@ -709,10 +709,6 @@ function startGame(resetPoint = false) {
 
 function connectMultiplayer() {
   const playerName = (playerNameInput.value || "").trim();
-  if (!playerName) {
-    messageText.textContent = "Hay nhap ten nguoi choi.";
-    return;
-  }
   const roomId = FIXED_ROOM_ID;
   myPlayerName = playerName;
   mpStatusText.textContent = "Dang ket noi...";
@@ -735,6 +731,10 @@ function connectMultiplayer() {
       mpClientId = msg.clientId;
       mpRoomId = msg.roomId;
       isRoomHost = Boolean(msg.isHost);
+      if (typeof msg.playerName === "string" && msg.playerName.trim()) {
+        myPlayerName = msg.playerName.trim().slice(0, 24);
+        if (playerNameInput) playerNameInput.value = myPlayerName;
+      }
       Object.keys(playerStats).forEach((k) => delete playerStats[k]);
       mergePeersRoster(msg.peers);
       ensurePlayer(mpClientId, myPlayerName);

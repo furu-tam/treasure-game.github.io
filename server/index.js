@@ -45,14 +45,16 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "join" && typeof msg.roomId === "string" && msg.roomId.trim()) {
-      const playerNameRaw = typeof msg.playerName === "string" ? msg.playerName : "Player";
-      const playerName = playerNameRaw.trim().slice(0, 24) || "Player";
       roomId = msg.roomId.trim().slice(0, 64);
       if (!rooms.has(roomId)) {
         rooms.set(roomId, new Map());
       }
       const room = rooms.get(roomId);
       const isHost = room.size === 0;
+      const nextPlayerN = room.size + 1;
+      const defaultName = `Player${nextPlayerN}`;
+      const playerNameRaw = typeof msg.playerName === "string" ? msg.playerName : "";
+      const playerName = playerNameRaw.trim().slice(0, 24) || defaultName;
       room.set(ws, { id: clientId, name: playerName });
       const peers = [...room.values()].map((p) => ({ id: p.id, name: p.name }));
 
@@ -63,6 +65,7 @@ wss.on("connection", (ws) => {
           clientId,
           isHost,
           peerCount: room.size,
+          playerName,
           peers
         })
       );
