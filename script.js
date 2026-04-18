@@ -50,6 +50,22 @@ function playBoomSound() {
   void boomSfxAudio.play().catch(() => {});
 }
 
+const SHIT_SFX_URL = "sound/shit.mp3";
+let shitSfxAudio = null;
+function playShitSound() {
+  if (!shitSfxAudio) shitSfxAudio = new Audio(SHIT_SFX_URL);
+  shitSfxAudio.currentTime = 0;
+  void shitSfxAudio.play().catch(() => {});
+}
+
+const WIN_SFX_URL = "sound/win.mp3";
+let winSfxAudio = null;
+function playWinSound() {
+  if (!winSfxAudio) winSfxAudio = new Audio(WIN_SFX_URL);
+  winSfxAudio.currentTime = 0;
+  void winSfxAudio.play().catch(() => {});
+}
+
 const BACKGROUND_THEMES = ["bg-ocean", "bg-space", "bg-landscape"];
 const ROLE_EXTRA_SCORE = { treasure: 10, heart: 50, fish: 7, poop: -15, crab: 5, crown: 30 };
 
@@ -499,6 +515,8 @@ function handleTileClick(btn, actorId = mpClientId) {
   if (mpConnected() && !isRoomHost) {
     if (btn.dataset.role === "treasure") playTreasureSound();
     else if (btn.dataset.role === "bomb") playBoomSound();
+    else if (btn.dataset.role === "poop") playShitSound();
+    else if (btn.dataset.role === "crown") playWinSound();
     sendRoomMsg({ kind: "guest_click", order: Number(btn.dataset.order) }, { toHostOnly: true });
     return;
   }
@@ -507,6 +525,8 @@ function handleTileClick(btn, actorId = mpClientId) {
   btn.dataset.revealed = "true";
   if (role === "treasure") playTreasureSound();
   else if (role === "bomb") playBoomSound();
+  else if (role === "poop") playShitSound();
+  else if (role === "crown") playWinSound();
 
   const afterScoreAndMessage = () => {
     updatePlayerScore(actorId, role);
