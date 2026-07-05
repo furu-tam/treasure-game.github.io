@@ -2129,8 +2129,7 @@ function memoryRenderUi() {
 
   if (!memoryBoard) return;
   memoryBoard.innerHTML = "";
-  const visibleCards = memoryState.cards.filter((c) => !c.matched);
-  const cols = memoryGridCols(visibleCards.length || memoryState.cards.length);
+  const cols = memoryState.cols || memoryGridCols(memoryState.cards.length);
   memoryBoard.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 
   const myTurn =
@@ -2140,10 +2139,17 @@ function memoryRenderUi() {
     (memoryIsLocalMode() || memoryState.turnPlayerId === mpClientId);
 
   memoryState.cards.forEach((card, i) => {
-    if (card.matched) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "memory-card";
+    if (card.matched) {
+      btn.classList.add("matched");
+      btn.textContent = "";
+      btn.disabled = true;
+      btn.setAttribute("aria-label", "O da ghep");
+      memoryBoard.appendChild(btn);
+      return;
+    }
     if (card.faceUp) btn.classList.add("face-up");
     if (myTurn && !card.faceUp) btn.classList.add("turn-active");
     btn.textContent = card.faceUp ? card.emoji : "?";
