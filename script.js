@@ -2047,6 +2047,24 @@ function memoryNextPlayerId(playerId) {
   return players[next].id;
 }
 
+function memoryAdvanceTurn(actorId) {
+  const nextId = memoryNextPlayerId(actorId);
+  memoryState.turnPlayerId = nextId;
+  const next = memoryState.players.find((p) => p.id === nextId);
+  memoryState.message = next ? `Luot ${next.name}.` : "Luot doi thu.";
+  memoryNotifyTurnChange(nextId);
+  if (!memoryIsLocalMode() && isRoomHost) {
+    memoryState.sfxEvent = { type: "turn", playerId: nextId };
+  }
+}
+
+function memoryInitDefaultLocalPlayers() {
+  if (memoryLocalPlayers.length) return;
+  memoryLocalIdSeq = 2;
+  memoryLocalPlayers.push({ id: "local-1", name: "Shin" }, { id: "local-2", name: "Ot" });
+  if (memoryLocalNameInput) memoryLocalNameInput.placeholder = "Them nguoi 3...";
+}
+
 function memoryApplyHostPermissions() {
   if (memoryTopbar) memoryTopbar.classList.toggle("section-hidden", memoryIsLocalMode() || !isRoomHost);
 }
@@ -2231,7 +2249,7 @@ function memoryHandleFlip(cardIndex, actorId) {
     if (scorer) scorer.score += 1;
     memoryState.firstPick = null;
     memoryState.phase = "match_hide";
-    memoryState.message = "Trung cap! +1 diem, luot tiep.";
+    memoryState.message = "Trung cap! +1 diem, chuyen luot.";
     memorySyncState();
 
     if (memoryState.matchHideTimer) clearTimeout(memoryState.matchHideTimer);
@@ -2242,6 +2260,7 @@ function memoryHandleFlip(cardIndex, actorId) {
       c1.faceUp = false;
       c2.faceUp = false;
       memoryState.phase = "pick";
+      memoryAdvanceTurn(actorId);
       memorySyncState();
       memoryCheckEnd();
     }, MEMORY_MATCH_HIDE_MS);
@@ -2261,14 +2280,7 @@ function memoryHandleFlip(cardIndex, actorId) {
     c2.faceUp = false;
     memoryState.firstPick = null;
     memoryState.phase = "pick";
-    const nextId = memoryNextPlayerId(actorId);
-    memoryState.turnPlayerId = nextId;
-    const next = memoryState.players.find((p) => p.id === nextId);
-    memoryState.message = next ? `Luot ${next.name}.` : "Luot doi thu.";
-    memoryNotifyTurnChange(nextId);
-    if (!memoryIsLocalMode() && isRoomHost) {
-      memoryState.sfxEvent = { type: "turn", playerId: nextId };
-    }
+    memoryAdvanceTurn(actorId);
     memorySyncState();
     memoryCheckEnd();
   }, MEMORY_RESOLVE_MS);
@@ -2537,6 +2549,7 @@ function initMemoryBindings() {
     });
   }
   if (memoryLocalStartBtn) memoryLocalStartBtn.addEventListener("click", memoryStartLocalGame);
+  memoryInitDefaultLocalPlayers();
   memorySetUiMode("online");
   memoryRenderLocalPlayerList();
 }
