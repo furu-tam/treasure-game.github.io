@@ -1902,6 +1902,9 @@ const MEMORY_EMOJIS = [
 const MEMORY_MIN_PAIRS = 2;
 const MEMORY_MAX_PAIRS = 12;
 const MEMORY_RESOLVE_MS = 900;
+const MEMORY_MATCH_HIDE_MS = 450;
+
+let memoryLastAnnouncedTurnId = "";
 
 const memoryStepConnect = document.getElementById("memoryStepConnect");
 const memoryStepGame = document.getElementById("memoryStepGame");
@@ -1945,7 +1948,9 @@ const memoryState = {
   phase: "pick",
   message: "",
   resultText: "",
-  resolveTimer: 0
+  resolveTimer: 0,
+  matchHideTimer: 0,
+  sfxEvent: null
 };
 
 function memoryIsLocalMode() {
@@ -1964,6 +1969,47 @@ function memoryMergeRoster(peers) {
 
 function memoryClearRoster() {
   Object.keys(memoryRoster).forEach((k) => delete memoryRoster[k]);
+}
+
+function memoryPlayTone(freq, dur, vol = 0.28) {
+  const url = URL.createObjectURL(buildSineWavBlob(freq, dur));
+  const a = new Audio(url);
+  a.volume = vol;
+  const done = () => URL.revokeObjectURL(url);
+  a.addEventListener("ended", done, { once: true });
+  void a.play().catch(done);
+}
+
+function memoryPlayMatchSound() {
+  memoryPlayTone(660, 0.1, 0.3);
+  window.setTimeout(() => memoryPlayTone(880, 0.14, 0.28), 85);
+}
+
+function memoryPlayWrongSound() {
+  memoryPlayTone(240, 0.09, 0.32);
+  window.setTimeout(() => memoryPlayTone(160, 0.16, 0.3), 70);
+}
+
+function memoryGetPlayerName(playerId) {
+  return memoryState.players.find((p) => p.id === playerId)?.name || "ban";
+}
+
+function memoryAnnounceTurn(playerId) {
+  if (!playerId) return;
+  speakMiniTts(`Đến lượt ${memoryGetPlayerName(playerId)}`);
+}
+
+function memoryNotifyTurnChange(playerId) {
+  if (!playerId || playerId === memoryLastAnnouncedTurnId) return;
+  memoryLastAnnouncedTurnId = playerId;
+  memoryAnnounceTurn(playerId);
+}
+
+function memoryProcessSfxEvent(ev) {
+  if (!ev || !ev.type) return;
+  if (ev.type === "match") memoryPlayMatchSound();
+  else if (ev.type === "miss") memoryPlayWrongSound();
+  else if (ev.type === "turn" && ev.playerId) memoryNotifyTurnChange(ev.playerId);
 }
 
 function memoryNormalizePairCount(inputEl) {
@@ -2018,11 +2064,13 @@ function memorySerializeState() {
     firstPick: memoryState.firstPick,
     phase: memoryState.phase,
     message: memoryState.message,
-    resultText: memoryState.resultText
+    resultText: memoryState.resultText,
+    sfxEvent: memoryState.sfxEvent
   };
 }
 
 function memoryApplyState(payload) {
+  if (payload.sfxEvent) memoryProcessSfxEvent(payload.sfxEvent);
   memoryState.mode = "online";
   memoryState.active = Boolean(payload.active);
   memoryState.finished = Boolean(payload.finished);
@@ -2051,6 +2099,7 @@ function memorySyncState() {
   memoryRenderUi();
   if (memoryIsLocalMode() || !memoryMpInRoom() || !isRoomHost) return;
   sendRoomMsg({ kind: "memory_full_state", state: memorySerializeState() }, { excludeSelf: true });
+  memoryState.sfxEvent = null;
 }
 
 function memoryRenderUi() {
@@ -2080,7 +2129,8 @@ function memoryRenderUi() {
 
   if (!memoryBoard) return;
   memoryBoard.innerHTML = "";
-  const cols = memoryState.cols || memoryGridCols(memoryState.cards.length);
+  const visibleCards = memoryState.cards.filter((c) => !c.matched);
+  const cols = memoryGridCols(visibleCards.length || memoryState.cards.length);
   memoryBoard.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
 
   const myTurn =
@@ -2090,20 +2140,18 @@ function memoryRenderUi() {
     (memoryIsLocalMode() || memoryState.turnPlayerId === mpClientId);
 
   memoryState.cards.forEach((card, i) => {
+    if (card.matched) return;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "memory-card";
-    if (card.matched) btn.classList.add("matched");
     if (card.faceUp) btn.classList.add("face-up");
-    if (myTurn && !card.matched && !card.faceUp) btn.classList.add("turn-active");
-    const showFace = card.faceUp || card.matched;
-    btn.textContent = showFace ? card.emoji : "?";
-    btn.setAttribute("aria-label", showFace ? `La ${card.emoji}` : "La kin");
+    if (myTurn && !card.faceUp) btn.classList.add("turn-active");
+    btn.textContent = card.faceUp ? card.emoji : "?";
+    btn.setAttribute("aria-label", card.faceUp ? `La ${card.emoji}` : "La kin");
     const canFlip =
       memoryState.active &&
       !memoryState.finished &&
       memoryState.phase === "pick" &&
-      !card.matched &&
       !card.faceUp &&
       myTurn;
     btn.disabled = !canFlip;
@@ -2122,6 +2170,10 @@ function memoryEndGame() {
   if (memoryState.resolveTimer) {
     clearTimeout(memoryState.resolveTimer);
     memoryState.resolveTimer = 0;
+  }
+  if (memoryState.matchHideTimer) {
+    clearTimeout(memoryState.matchHideTimer);
+    memoryState.matchHideTimer = 0;
   }
   memoryState.active = false;
   memoryState.finished = true;
@@ -2167,19 +2219,31 @@ function memoryHandleFlip(cardIndex, actorId) {
   const c2 = card;
 
   if (c1.pairId === c2.pairId) {
-    c1.matched = true;
-    c2.matched = true;
-    c1.faceUp = false;
-    c2.faceUp = false;
+    memoryPlayMatchSound();
+    if (!memoryIsLocalMode() && isRoomHost) memoryState.sfxEvent = { type: "match" };
     const scorer = memoryState.players.find((p) => p.id === actorId);
     if (scorer) scorer.score += 1;
     memoryState.firstPick = null;
+    memoryState.phase = "match_hide";
     memoryState.message = "Trung cap! +1 diem, luot tiep.";
     memorySyncState();
-    memoryCheckEnd();
+
+    if (memoryState.matchHideTimer) clearTimeout(memoryState.matchHideTimer);
+    memoryState.matchHideTimer = window.setTimeout(() => {
+      memoryState.matchHideTimer = 0;
+      c1.matched = true;
+      c2.matched = true;
+      c1.faceUp = false;
+      c2.faceUp = false;
+      memoryState.phase = "pick";
+      memorySyncState();
+      memoryCheckEnd();
+    }, MEMORY_MATCH_HIDE_MS);
     return;
   }
 
+  memoryPlayWrongSound();
+  if (!memoryIsLocalMode() && isRoomHost) memoryState.sfxEvent = { type: "miss" };
   memoryState.phase = "resolve";
   memoryState.message = "Khong trung, doi lat lai...";
   memorySyncState();
@@ -2191,9 +2255,14 @@ function memoryHandleFlip(cardIndex, actorId) {
     c2.faceUp = false;
     memoryState.firstPick = null;
     memoryState.phase = "pick";
-    memoryState.turnPlayerId = memoryNextPlayerId(actorId);
-    const next = memoryState.players.find((p) => p.id === memoryState.turnPlayerId);
+    const nextId = memoryNextPlayerId(actorId);
+    memoryState.turnPlayerId = nextId;
+    const next = memoryState.players.find((p) => p.id === nextId);
     memoryState.message = next ? `Luot ${next.name}.` : "Luot doi thu.";
+    memoryNotifyTurnChange(nextId);
+    if (!memoryIsLocalMode() && isRoomHost) {
+      memoryState.sfxEvent = { type: "turn", playerId: nextId };
+    }
     memorySyncState();
     memoryCheckEnd();
   }, MEMORY_RESOLVE_MS);
@@ -2225,6 +2294,11 @@ function memoryBeginRound(players, pairCount) {
     clearTimeout(memoryState.resolveTimer);
     memoryState.resolveTimer = 0;
   }
+  if (memoryState.matchHideTimer) {
+    clearTimeout(memoryState.matchHideTimer);
+    memoryState.matchHideTimer = 0;
+  }
+  memoryLastAnnouncedTurnId = "";
   const cards = memoryBuildDeck(pairCount);
   memoryState.active = true;
   memoryState.finished = false;
@@ -2236,8 +2310,13 @@ function memoryBeginRound(players, pairCount) {
   memoryState.firstPick = null;
   memoryState.phase = "pick";
   memoryState.resultText = "";
+  memoryState.sfxEvent = null;
   memoryState.message = `Bat dau! ${memoryState.players[0].name} di truoc. Tim ${pairCount} cap.`;
   if (memoryOverlay) memoryOverlay.classList.add("section-hidden");
+  memoryNotifyTurnChange(memoryState.turnPlayerId);
+  if (!memoryIsLocalMode() && isRoomHost) {
+    memoryState.sfxEvent = { type: "turn", playerId: memoryState.turnPlayerId };
+  }
   memorySyncState();
 }
 
