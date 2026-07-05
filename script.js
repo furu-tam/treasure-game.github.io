@@ -2495,7 +2495,7 @@ function setupAppNavigation() {
     });
   });
 
-  showAppView("treasure");
+  showAppView("memory");
 }
 
 window.addEventListener("beforeunload", () => miniAudioDisposeAll());
