@@ -597,6 +597,10 @@ button.menu-card p {
   background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(180, 83, 9, 0.45));
 }
 
+.menu-card--memory {
+  background: linear-gradient(155deg, rgba(30, 41, 59, 0.95), rgba(109, 40, 217, 0.45));
+}
+
 .menu-card__icon {
   font-size: 2.25rem;
   line-height: 1;
@@ -922,4 +926,127 @@ button.menu-card p {
   .chicken-bars {
     grid-template-columns: 1fr;
   }
+}
+
+/* —— Lat the (memory) —— */
+.page-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 32px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.memory-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.memory-game-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.memory-score-pill strong {
+  color: #facc15;
+}
+
+.memory-turn-pill strong {
+  color: #93c5fd;
+}
+
+.memory-board-wrap {
+  width: 100%;
+  padding: 8px 0;
+}
+
+.memory-board {
+  display: grid;
+  gap: clamp(6px, 1.5vw, 12px);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.memory-card {
+  aspect-ratio: 3 / 4;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, #4f46e5, #312e81);
+  color: #e0e7ff;
+  font-size: clamp(18px, 4.5vw, 32px);
+  font-weight: 800;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+.memory-card:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.memory-card.face-up {
+  background: linear-gradient(145deg, #f8fafc, #cbd5e1);
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.memory-card.matched {
+  background: linear-gradient(145deg, #22c55e, #15803d);
+  color: #ecfdf5;
+  border-color: rgba(34, 197, 94, 0.6);
+  opacity: 0.85;
+}
+
+.memory-card.turn-active:not(:disabled) {
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.55);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .memory-card:not(:disabled):hover {
+    transform: scale(1.04);
+  }
+}
+
+.memory-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.82);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 99998;
+  text-align: center;
+}
+
+.memory-overlay:not(.section-hidden) {
+  display: grid;
+}
+
+.memory-overlay .card h2 {
+  font-size: 22px;
+}
+
+.memory-overlay .card p {
+  font-size: 16px;
+  line-height: 1.5;
 }

@@ -796,6 +796,8 @@ function connectMultiplayer() {
         chickenHandleRemoteInput(data, msg.from);
       } else if (data.kind === "chicken_full_state" && !isRoomHost) {
         chickenApplyState(data.state || {});
+      } else if (data.kind && String(data.kind).startsWith("memory_")) {
+        memoryHandleRoomMsg(data, msg.from);
       }
     }
   });
@@ -1893,13 +1895,457 @@ function initChickenBindings() {
   chickenDraw();
 }
 
+const MEMORY_ROOM_ID = "memory";
+const MEMORY_EMOJIS = [
+  "🍎", "🍌", "🍇", "🍒", "🌟", "🎈", "🎸", "🚗", "🐶", "🐱", "🦋", "🌸", "⚽", "🎮", "🍕", "🌙", "🔔", "💎", "🎯", "🎪"
+];
+const MEMORY_MIN_PAIRS = 2;
+const MEMORY_MAX_PAIRS = 12;
+const MEMORY_RESOLVE_MS = 900;
+
+const memoryStepConnect = document.getElementById("memoryStepConnect");
+const memoryStepGame = document.getElementById("memoryStepGame");
+const memoryTopbar = document.getElementById("memoryTopbar");
+const memoryPlayerNameInput = document.getElementById("memoryPlayerNameInput");
+const memoryMpConnectBtn = document.getElementById("memoryMpConnectBtn");
+const memoryMpStatusText = document.getElementById("memoryMpStatusText");
+const memoryPairCountInput = document.getElementById("memoryPairCountInput");
+const memoryStartBtn = document.getElementById("memoryStartBtn");
+const memoryScore1Text = document.getElementById("memoryScore1Text");
+const memoryScore2Text = document.getElementById("memoryScore2Text");
+const memoryScore1Pill = document.getElementById("memoryScore1Pill");
+const memoryScore2Pill = document.getElementById("memoryScore2Pill");
+const memoryTurnText = document.getElementById("memoryTurnText");
+const memoryMessageText = document.getElementById("memoryMessageText");
+const memoryBoard = document.getElementById("memoryBoard");
+const memoryOverlay = document.getElementById("memoryOverlay");
+const memoryResultText = document.getElementById("memoryResultText");
+const memoryPlayAgainBtn = document.getElementById("memoryPlayAgainBtn");
+
+const memoryRoster = {};
+const memoryState = {
+  active: false,
+  finished: false,
+  pairCount: 8,
+  cols: 4,
+  cards: [],
+  players: [],
+  turnPlayerId: "",
+  firstPick: null,
+  phase: "pick",
+  message: "",
+  resultText: "",
+  resolveTimer: 0
+};
+
+function memoryMpInRoom() {
+  return mpConnected() && mpRoomId === MEMORY_ROOM_ID;
+}
+
+function memoryMergeRoster(peers) {
+  (peers || []).forEach((p) => {
+    if (p && p.id) memoryRoster[p.id] = p.name || "Player";
+  });
+}
+
+function memoryClearRoster() {
+  Object.keys(memoryRoster).forEach((k) => delete memoryRoster[k]);
+}
+
+function memoryNormalizePairCount() {
+  const max = Math.min(MEMORY_MAX_PAIRS, MEMORY_EMOJIS.length);
+  let n = Number(memoryPairCountInput?.value) || 8;
+  n = Math.max(MEMORY_MIN_PAIRS, Math.min(max, Math.round(n)));
+  if (memoryPairCountInput) memoryPairCountInput.value = String(n);
+  return n;
+}
+
+function memoryGridCols(totalCards) {
+  return Math.max(2, Math.min(6, Math.ceil(Math.sqrt(totalCards))));
+}
+
+function memoryBuildDeck(pairCount) {
+  const deck = [];
+  for (let i = 0; i < pairCount; i += 1) {
+    const emoji = MEMORY_EMOJIS[i % MEMORY_EMOJIS.length];
+    deck.push({ pairId: i, emoji, matched: false, faceUp: false });
+    deck.push({ pairId: i, emoji, matched: false, faceUp: false });
+  }
+  for (let i = deck.length - 1; i > 0; i -= 1) {
+    const j = randInt(0, i);
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function memoryOtherPlayerId(playerId) {
+  const other = memoryState.players.find((p) => p.id !== playerId);
+  return other ? other.id : playerId;
+}
+
+function memoryApplyHostPermissions() {
+  if (memoryTopbar) memoryTopbar.classList.toggle("section-hidden", !isRoomHost);
+}
+
+function memorySerializeState() {
+  return {
+    active: memoryState.active,
+    finished: memoryState.finished,
+    pairCount: memoryState.pairCount,
+    cols: memoryState.cols,
+    cards: memoryState.cards.map((c) => ({ ...c })),
+    players: memoryState.players.map((p) => ({ ...p })),
+    turnPlayerId: memoryState.turnPlayerId,
+    firstPick: memoryState.firstPick,
+    phase: memoryState.phase,
+    message: memoryState.message,
+    resultText: memoryState.resultText
+  };
+}
+
+function memoryApplyState(payload) {
+  memoryState.active = Boolean(payload.active);
+  memoryState.finished = Boolean(payload.finished);
+  memoryState.pairCount = Number(payload.pairCount) || 8;
+  memoryState.cols = Number(payload.cols) || memoryGridCols((payload.cards || []).length);
+  memoryState.cards = (payload.cards || []).map((c) => ({
+    pairId: c.pairId,
+    emoji: c.emoji,
+    matched: Boolean(c.matched),
+    faceUp: Boolean(c.faceUp)
+  }));
+  memoryState.players = (payload.players || []).map((p) => ({
+    id: p.id,
+    name: p.name || "Player",
+    score: Number(p.score) || 0
+  }));
+  memoryState.turnPlayerId = payload.turnPlayerId || "";
+  memoryState.firstPick = payload.firstPick == null ? null : Number(payload.firstPick);
+  memoryState.phase = payload.phase === "resolve" ? "resolve" : "pick";
+  memoryState.message = payload.message || "";
+  memoryState.resultText = payload.resultText || "";
+  memoryRenderUi();
+}
+
+function memorySyncState() {
+  memoryRenderUi();
+  if (!memoryMpInRoom() || !isRoomHost) return;
+  sendRoomMsg({ kind: "memory_full_state", state: memorySerializeState() }, { excludeSelf: true });
+}
+
+function memoryRenderUi() {
+  const p1 = memoryState.players[0];
+  const p2 = memoryState.players[1];
+  if (memoryScore1Pill && memoryScore1Text && p1) {
+    memoryScore1Pill.replaceChildren(
+      document.createTextNode(`${p1.name}: `),
+      Object.assign(memoryScore1Text, { textContent: String(p1.score) })
+    );
+  } else if (memoryScore1Text) memoryScore1Text.textContent = "0";
+  if (memoryScore2Pill && memoryScore2Text && p2) {
+    memoryScore2Pill.replaceChildren(
+      document.createTextNode(`${p2.name}: `),
+      Object.assign(memoryScore2Text, { textContent: String(p2.score) })
+    );
+  } else if (memoryScore2Text) memoryScore2Text.textContent = "0";
+  const turnP = memoryState.players.find((p) => p.id === memoryState.turnPlayerId);
+  if (memoryTurnText) {
+    memoryTurnText.textContent = turnP ? turnP.name : "—";
+  }
+  if (memoryMessageText) memoryMessageText.textContent = memoryState.message || "";
+  if (memoryOverlay) {
+    memoryOverlay.classList.toggle("section-hidden", !memoryState.finished);
+  }
+  if (memoryResultText) memoryResultText.textContent = memoryState.resultText || "";
+
+  if (!memoryBoard) return;
+  memoryBoard.innerHTML = "";
+  const cols = memoryState.cols || memoryGridCols(memoryState.cards.length);
+  memoryBoard.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
+  const myTurn =
+    memoryState.active &&
+    !memoryState.finished &&
+    memoryState.turnPlayerId === mpClientId &&
+    memoryState.phase === "pick";
+
+  memoryState.cards.forEach((card, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "memory-card";
+    if (card.matched) btn.classList.add("matched");
+    if (card.faceUp) btn.classList.add("face-up");
+    if (myTurn && !card.matched && !card.faceUp) btn.classList.add("turn-active");
+    const showFace = card.faceUp || card.matched;
+    btn.textContent = showFace ? card.emoji : "?";
+    btn.setAttribute("aria-label", showFace ? `La ${card.emoji}` : "La kin");
+    const canFlip =
+      memoryState.active &&
+      !memoryState.finished &&
+      memoryState.phase === "pick" &&
+      !card.matched &&
+      !card.faceUp &&
+      myTurn;
+    btn.disabled = !canFlip;
+    btn.addEventListener("click", () => memoryOnCardClick(i));
+    memoryBoard.appendChild(btn);
+  });
+}
+
+function memoryCheckEnd() {
+  if (!memoryState.cards.length || !memoryState.cards.every((c) => c.matched)) return false;
+  memoryEndGame();
+  return true;
+}
+
+function memoryEndGame() {
+  if (memoryState.resolveTimer) {
+    clearTimeout(memoryState.resolveTimer);
+    memoryState.resolveTimer = 0;
+  }
+  memoryState.active = false;
+  memoryState.finished = true;
+  memoryState.phase = "pick";
+  memoryState.firstPick = null;
+  const [a, b] = memoryState.players;
+  if (a && b) {
+    let verdict = "Hoa!";
+    if (a.score > b.score) verdict = `${a.name} thang!`;
+    else if (b.score > a.score) verdict = `${b.name} thang!`;
+    memoryState.resultText = `${a.name}: ${a.score} diem | ${b.name}: ${b.score} diem. ${verdict}`;
+    memoryState.message = "Het bai! Xem tong ket.";
+  } else {
+    memoryState.resultText = "Het bai!";
+  }
+  memorySyncState();
+}
+
+function memoryHandleFlip(cardIndex, actorId) {
+  if (!isRoomHost) return;
+  if (!memoryState.active || memoryState.finished) return;
+  if (memoryState.phase !== "pick") return;
+  if (actorId !== memoryState.turnPlayerId) return;
+
+  const idx = Number(cardIndex);
+  const card = memoryState.cards[idx];
+  if (!card || card.matched || card.faceUp) return;
+
+  card.faceUp = true;
+
+  if (memoryState.firstPick === null) {
+    memoryState.firstPick = idx;
+    memoryState.message = "Chon la thu 2.";
+    memorySyncState();
+    return;
+  }
+
+  const firstIdx = memoryState.firstPick;
+  if (firstIdx === idx) return;
+
+  const c1 = memoryState.cards[firstIdx];
+  const c2 = card;
+
+  if (c1.pairId === c2.pairId) {
+    c1.matched = true;
+    c2.matched = true;
+    c1.faceUp = false;
+    c2.faceUp = false;
+    const scorer = memoryState.players.find((p) => p.id === actorId);
+    if (scorer) scorer.score += 1;
+    memoryState.firstPick = null;
+    memoryState.message = "Trung cap! +1 diem, luot tiep.";
+    memorySyncState();
+    memoryCheckEnd();
+    return;
+  }
+
+  memoryState.phase = "resolve";
+  memoryState.message = "Khong trung, doi lat lai...";
+  memorySyncState();
+
+  if (memoryState.resolveTimer) clearTimeout(memoryState.resolveTimer);
+  memoryState.resolveTimer = window.setTimeout(() => {
+    memoryState.resolveTimer = 0;
+    c1.faceUp = false;
+    c2.faceUp = false;
+    memoryState.firstPick = null;
+    memoryState.phase = "pick";
+    memoryState.turnPlayerId = memoryOtherPlayerId(actorId);
+    const next = memoryState.players.find((p) => p.id === memoryState.turnPlayerId);
+    memoryState.message = next ? `Luot ${next.name}.` : "Luot doi thu.";
+    memorySyncState();
+    memoryCheckEnd();
+  }, MEMORY_RESOLVE_MS);
+}
+
+function memoryOnCardClick(cardIndex) {
+  if (!memoryState.active || memoryState.finished) return;
+  if (memoryState.turnPlayerId !== mpClientId) {
+    memoryState.message = "Chua den luot ban.";
+    memoryRenderUi();
+    return;
+  }
+  if (memoryMpInRoom() && !isRoomHost) {
+    sendRoomMsg({ kind: "memory_flip", cardIndex }, { toHostOnly: true });
+    return;
+  }
+  if (isRoomHost) memoryHandleFlip(cardIndex, mpClientId);
+}
+
+function memoryStartGame() {
+  if (memoryMpInRoom() && !isRoomHost) {
+    sendRoomMsg({ kind: "memory_start" }, { toHostOnly: true });
+    return;
+  }
+  if (!isRoomHost) {
+    if (memoryMessageText) memoryMessageText.textContent = "Chi chu phong moi Start.";
+    return;
+  }
+
+  const rosterList = Object.entries(memoryRoster).map(([id, name]) => ({ id, name }));
+  if (rosterList.length < 2) {
+    memoryState.message = "Can it nhat 2 nguoi trong phong memory.";
+    memoryRenderUi();
+    return;
+  }
+
+  if (memoryState.resolveTimer) {
+    clearTimeout(memoryState.resolveTimer);
+    memoryState.resolveTimer = 0;
+  }
+
+  const pairCount = memoryNormalizePairCount();
+  const cards = memoryBuildDeck(pairCount);
+  const other = rosterList.find((p) => p.id !== mpClientId) || rosterList[1];
+  const players = [
+    { id: mpClientId, name: myPlayerName || memoryRoster[mpClientId] || "Host", score: 0 },
+    { id: other.id, name: other.name, score: 0 }
+  ];
+
+  memoryState.active = true;
+  memoryState.finished = false;
+  memoryState.pairCount = pairCount;
+  memoryState.cols = memoryGridCols(cards.length);
+  memoryState.cards = cards;
+  memoryState.players = players;
+  memoryState.turnPlayerId = players[0].id;
+  memoryState.firstPick = null;
+  memoryState.phase = "pick";
+  memoryState.resultText = "";
+  memoryState.message = `Bat dau! ${players[0].name} di truoc. Tim ${pairCount} cap.`;
+  if (memoryOverlay) memoryOverlay.classList.add("section-hidden");
+  memorySyncState();
+}
+
+function memoryHandleRoomMsg(data, fromId) {
+  if (!data || !data.kind) return;
+  if (data.kind === "memory_start" && isRoomHost) {
+    memoryStartGame();
+  } else if (data.kind === "memory_need_state" && isRoomHost) {
+    memorySyncState();
+  } else if (data.kind === "memory_flip" && isRoomHost) {
+    memoryHandleFlip(Number(data.cardIndex), fromId);
+  } else if (data.kind === "memory_full_state" && !isRoomHost) {
+    memoryApplyState(data.state || {});
+  }
+}
+
+function connectMemoryMultiplayer() {
+  const playerName = (memoryPlayerNameInput?.value || "").trim();
+  const roomId = MEMORY_ROOM_ID;
+  myPlayerName = playerName;
+  if (memoryMpStatusText) memoryMpStatusText.textContent = "Dang ket noi...";
+  if (mpSocket) mpSocket.close();
+
+  mpSocket = new WebSocket(WS_SERVER_URL);
+  mpSocket.addEventListener("open", () => {
+    mpSocket.send(JSON.stringify({ type: "join", roomId, playerName }));
+  });
+
+  mpSocket.addEventListener("message", (ev) => {
+    let msg;
+    try {
+      msg = JSON.parse(String(ev.data));
+    } catch {
+      return;
+    }
+
+    if (msg.type === "joined") {
+      mpClientId = msg.clientId;
+      mpRoomId = msg.roomId;
+      isRoomHost = Boolean(msg.isHost);
+      if (typeof msg.playerName === "string" && msg.playerName.trim()) {
+        myPlayerName = msg.playerName.trim().slice(0, 24);
+        if (memoryPlayerNameInput) memoryPlayerNameInput.value = myPlayerName;
+      }
+      memoryClearRoster();
+      memoryMergeRoster(msg.peers);
+      memoryRoster[mpClientId] = myPlayerName;
+      memoryStepConnect?.classList.add("section-hidden");
+      memoryStepGame?.classList.remove("section-hidden");
+      memoryApplyHostPermissions();
+      if (memoryMpStatusText) {
+        memoryMpStatusText.textContent = isRoomHost ? `Host · ${mpRoomId}` : `Khach · ${mpRoomId}`;
+      }
+      if (memoryMessageText) {
+        memoryMessageText.textContent = isRoomHost
+          ? "Cau hinh so cap the va bam Start (can 2 nguoi)."
+          : "Dang doi chu phong start game...";
+      }
+      if (!isRoomHost) sendRoomMsg({ kind: "memory_need_state" }, { toHostOnly: true });
+      return;
+    }
+
+    if (msg.type === "room_roster" && Array.isArray(msg.peers)) {
+      memoryMergeRoster(msg.peers);
+      memoryRoster[mpClientId] = myPlayerName;
+      return;
+    }
+
+    if (msg.type === "peer_joined" && msg.player) {
+      memoryRoster[msg.player.id] = msg.player.name || "Player";
+      return;
+    }
+
+    if (msg.type === "peer_left" && msg.playerId) {
+      delete memoryRoster[msg.playerId];
+      return;
+    }
+
+    if (msg.type === "promoted_host") {
+      isRoomHost = true;
+      memoryApplyHostPermissions();
+      if (memoryMessageText) memoryMessageText.textContent = "Ban la host moi. Co the Start game.";
+      return;
+    }
+
+    if (msg.type === "room_msg" && msg.data) {
+      memoryHandleRoomMsg(msg.data, msg.from);
+    }
+  });
+
+  mpSocket.addEventListener("close", () => {
+    if (memoryMpStatusText) memoryMpStatusText.textContent = "Offline";
+  });
+  mpSocket.addEventListener("error", () => {
+    if (memoryMpStatusText) memoryMpStatusText.textContent = "Loi ket noi";
+  });
+}
+
+function initMemoryBindings() {
+  if (memoryMpConnectBtn) memoryMpConnectBtn.addEventListener("click", connectMemoryMultiplayer);
+  if (memoryStartBtn) memoryStartBtn.addEventListener("click", memoryStartGame);
+  if (memoryPlayAgainBtn) memoryPlayAgainBtn.addEventListener("click", memoryStartGame);
+}
+
 function setupAppNavigation() {
   const viewMenu = document.getElementById("viewMenu");
   const viewTreasure = document.getElementById("viewTreasure");
   const viewMini = document.getElementById("viewMini");
   const viewSnake = document.getElementById("viewSnake");
   const viewChicken = document.getElementById("viewChicken");
-  if (!viewMenu || !viewTreasure || !viewMini || !viewSnake || !viewChicken) return;
+  const viewMemory = document.getElementById("viewMemory");
+  if (!viewMenu || !viewTreasure || !viewMini || !viewSnake || !viewChicken || !viewMemory) return;
 
   function showAppView(name) {
     viewMenu.classList.toggle("section-hidden", name !== "menu");
@@ -1907,6 +2353,7 @@ function setupAppNavigation() {
     viewMini.classList.toggle("section-hidden", name !== "mini");
     viewSnake.classList.toggle("section-hidden", name !== "snake");
     viewChicken.classList.toggle("section-hidden", name !== "chicken");
+    viewMemory.classList.toggle("section-hidden", name !== "memory");
     if (name === "mini") void initMiniGameDemo();
     if (name === "snake") resizeSnakeCanvas();
     else stopSnakeGame(false);
@@ -1917,12 +2364,15 @@ function setupAppNavigation() {
     } else {
       chickenStopGame();
     }
+    if (name === "memory" && memoryMpInRoom() && !isRoomHost) {
+      sendRoomMsg({ kind: "memory_need_state" }, { toHostOnly: true });
+    }
   }
 
   document.querySelectorAll("[data-app-view]").forEach((el) => {
     el.addEventListener("click", () => {
       const v = el.getAttribute("data-app-view");
-      if (v === "menu" || v === "treasure" || v === "mini" || v === "snake" || v === "chicken")
+      if (v === "menu" || v === "treasure" || v === "mini" || v === "snake" || v === "chicken" || v === "memory")
         showAppView(v);
     });
   });
@@ -1934,6 +2384,7 @@ window.addEventListener("beforeunload", () => miniAudioDisposeAll());
 
 initSnakeBindings();
 initChickenBindings();
+initMemoryBindings();
 setupAppNavigation();
 updateHud();
 applyRandomBackground();
