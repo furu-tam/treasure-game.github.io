@@ -1911,11 +1911,17 @@ const memoryMpConnectBtn = document.getElementById("memoryMpConnectBtn");
 const memoryMpStatusText = document.getElementById("memoryMpStatusText");
 const memoryPairCountInput = document.getElementById("memoryPairCountInput");
 const memoryStartBtn = document.getElementById("memoryStartBtn");
-const memoryScore1Text = document.getElementById("memoryScore1Text");
-const memoryScore2Text = document.getElementById("memoryScore2Text");
-const memoryScore1Pill = document.getElementById("memoryScore1Pill");
-const memoryScore2Pill = document.getElementById("memoryScore2Pill");
+const memoryModeOnlineBtn = document.getElementById("memoryModeOnlineBtn");
+const memoryModeLocalBtn = document.getElementById("memoryModeLocalBtn");
+const memoryOnlinePanel = document.getElementById("memoryOnlinePanel");
+const memoryLocalPanel = document.getElementById("memoryLocalPanel");
+const memoryLocalNameInput = document.getElementById("memoryLocalNameInput");
+const memoryAddLocalPlayerBtn = document.getElementById("memoryAddLocalPlayerBtn");
+const memoryLocalPlayerList = document.getElementById("memoryLocalPlayerList");
+const memoryLocalPairCountInput = document.getElementById("memoryLocalPairCountInput");
+const memoryLocalStartBtn = document.getElementById("memoryLocalStartBtn");
 const memoryTurnText = document.getElementById("memoryTurnText");
+const memoryScoresRow = document.getElementById("memoryScoresRow");
 const memoryMessageText = document.getElementById("memoryMessageText");
 const memoryBoard = document.getElementById("memoryBoard");
 const memoryOverlay = document.getElementById("memoryOverlay");
@@ -1923,7 +1929,11 @@ const memoryResultText = document.getElementById("memoryResultText");
 const memoryPlayAgainBtn = document.getElementById("memoryPlayAgainBtn");
 
 const memoryRoster = {};
+const memoryLocalPlayers = [];
+let memoryLocalIdSeq = 0;
+let memoryUiMode = "online";
 const memoryState = {
+  mode: "online",
   active: false,
   finished: false,
   pairCount: 8,
@@ -1938,8 +1948,12 @@ const memoryState = {
   resolveTimer: 0
 };
 
+function memoryIsLocalMode() {
+  return memoryState.mode === "local";
+}
+
 function memoryMpInRoom() {
-  return mpConnected() && mpRoomId === MEMORY_ROOM_ID;
+  return mpConnected() && mpRoomId === MEMORY_ROOM_ID && !memoryIsLocalMode();
 }
 
 function memoryMergeRoster(peers) {
@@ -1952,11 +1966,12 @@ function memoryClearRoster() {
   Object.keys(memoryRoster).forEach((k) => delete memoryRoster[k]);
 }
 
-function memoryNormalizePairCount() {
+function memoryNormalizePairCount(inputEl) {
   const max = Math.min(MEMORY_MAX_PAIRS, MEMORY_EMOJIS.length);
-  let n = Number(memoryPairCountInput?.value) || 8;
+  const el = inputEl || (memoryIsLocalMode() ? memoryLocalPairCountInput : memoryPairCountInput);
+  let n = Number(el?.value) || 8;
   n = Math.max(MEMORY_MIN_PAIRS, Math.min(max, Math.round(n)));
-  if (memoryPairCountInput) memoryPairCountInput.value = String(n);
+  if (el) el.value = String(n);
   return n;
 }
 
@@ -1978,17 +1993,21 @@ function memoryBuildDeck(pairCount) {
   return deck;
 }
 
-function memoryOtherPlayerId(playerId) {
-  const other = memoryState.players.find((p) => p.id !== playerId);
-  return other ? other.id : playerId;
+function memoryNextPlayerId(playerId) {
+  const players = memoryState.players;
+  if (players.length < 2) return playerId;
+  const idx = players.findIndex((p) => p.id === playerId);
+  const next = idx < 0 ? 0 : (idx + 1) % players.length;
+  return players[next].id;
 }
 
 function memoryApplyHostPermissions() {
-  if (memoryTopbar) memoryTopbar.classList.toggle("section-hidden", !isRoomHost);
+  if (memoryTopbar) memoryTopbar.classList.toggle("section-hidden", memoryIsLocalMode() || !isRoomHost);
 }
 
 function memorySerializeState() {
   return {
+    mode: "online",
     active: memoryState.active,
     finished: memoryState.finished,
     pairCount: memoryState.pairCount,
@@ -2004,6 +2023,7 @@ function memorySerializeState() {
 }
 
 function memoryApplyState(payload) {
+  memoryState.mode = "online";
   memoryState.active = Boolean(payload.active);
   memoryState.finished = Boolean(payload.finished);
   memoryState.pairCount = Number(payload.pairCount) || 8;
@@ -2029,28 +2049,28 @@ function memoryApplyState(payload) {
 
 function memorySyncState() {
   memoryRenderUi();
-  if (!memoryMpInRoom() || !isRoomHost) return;
+  if (memoryIsLocalMode() || !memoryMpInRoom() || !isRoomHost) return;
   sendRoomMsg({ kind: "memory_full_state", state: memorySerializeState() }, { excludeSelf: true });
 }
 
 function memoryRenderUi() {
-  const p1 = memoryState.players[0];
-  const p2 = memoryState.players[1];
-  if (memoryScore1Pill && memoryScore1Text && p1) {
-    memoryScore1Pill.replaceChildren(
-      document.createTextNode(`${p1.name}: `),
-      Object.assign(memoryScore1Text, { textContent: String(p1.score) })
-    );
-  } else if (memoryScore1Text) memoryScore1Text.textContent = "0";
-  if (memoryScore2Pill && memoryScore2Text && p2) {
-    memoryScore2Pill.replaceChildren(
-      document.createTextNode(`${p2.name}: `),
-      Object.assign(memoryScore2Text, { textContent: String(p2.score) })
-    );
-  } else if (memoryScore2Text) memoryScore2Text.textContent = "0";
   const turnP = memoryState.players.find((p) => p.id === memoryState.turnPlayerId);
   if (memoryTurnText) {
     memoryTurnText.textContent = turnP ? turnP.name : "—";
+  }
+  if (memoryScoresRow) {
+    memoryScoresRow.replaceChildren();
+    memoryState.players.forEach((p) => {
+      const isTurn =
+        memoryState.active && !memoryState.finished && p.id === memoryState.turnPlayerId;
+      const span = document.createElement("span");
+      span.className = `pill memory-score-pill${isTurn ? " memory-score-pill--turn" : ""}`;
+      span.append(`${p.name}: `);
+      const strong = document.createElement("strong");
+      strong.textContent = String(p.score);
+      span.appendChild(strong);
+      memoryScoresRow.appendChild(span);
+    });
   }
   if (memoryMessageText) memoryMessageText.textContent = memoryState.message || "";
   if (memoryOverlay) {
@@ -2066,8 +2086,8 @@ function memoryRenderUi() {
   const myTurn =
     memoryState.active &&
     !memoryState.finished &&
-    memoryState.turnPlayerId === mpClientId &&
-    memoryState.phase === "pick";
+    memoryState.phase === "pick" &&
+    (memoryIsLocalMode() || memoryState.turnPlayerId === mpClientId);
 
   memoryState.cards.forEach((card, i) => {
     const btn = document.createElement("button");
@@ -2107,12 +2127,13 @@ function memoryEndGame() {
   memoryState.finished = true;
   memoryState.phase = "pick";
   memoryState.firstPick = null;
-  const [a, b] = memoryState.players;
-  if (a && b) {
-    let verdict = "Hoa!";
-    if (a.score > b.score) verdict = `${a.name} thang!`;
-    else if (b.score > a.score) verdict = `${b.name} thang!`;
-    memoryState.resultText = `${a.name}: ${a.score} diem | ${b.name}: ${b.score} diem. ${verdict}`;
+  const players = memoryState.players;
+  if (players.length) {
+    const summary = players.map((p) => `${p.name}: ${p.score} diem`).join(" | ");
+    const topScore = Math.max(...players.map((p) => p.score));
+    const winners = players.filter((p) => p.score === topScore);
+    let verdict = winners.length > 1 ? "Hoa!" : `${winners[0].name} thang!`;
+    memoryState.resultText = `${summary}. ${verdict}`;
     memoryState.message = "Het bai! Xem tong ket.";
   } else {
     memoryState.resultText = "Het bai!";
@@ -2121,7 +2142,7 @@ function memoryEndGame() {
 }
 
 function memoryHandleFlip(cardIndex, actorId) {
-  if (!isRoomHost) return;
+  if (!memoryIsLocalMode() && !isRoomHost) return;
   if (!memoryState.active || memoryState.finished) return;
   if (memoryState.phase !== "pick") return;
   if (actorId !== memoryState.turnPlayerId) return;
@@ -2170,7 +2191,7 @@ function memoryHandleFlip(cardIndex, actorId) {
     c2.faceUp = false;
     memoryState.firstPick = null;
     memoryState.phase = "pick";
-    memoryState.turnPlayerId = memoryOtherPlayerId(actorId);
+    memoryState.turnPlayerId = memoryNextPlayerId(actorId);
     const next = memoryState.players.find((p) => p.id === memoryState.turnPlayerId);
     memoryState.message = next ? `Luot ${next.name}.` : "Luot doi thu.";
     memorySyncState();
@@ -2180,6 +2201,13 @@ function memoryHandleFlip(cardIndex, actorId) {
 
 function memoryOnCardClick(cardIndex) {
   if (!memoryState.active || memoryState.finished) return;
+  if (memoryState.phase !== "pick") return;
+
+  if (memoryIsLocalMode()) {
+    memoryHandleFlip(cardIndex, memoryState.turnPlayerId);
+    return;
+  }
+
   if (memoryState.turnPlayerId !== mpClientId) {
     memoryState.message = "Chua den luot ban.";
     memoryRenderUi();
@@ -2192,7 +2220,28 @@ function memoryOnCardClick(cardIndex) {
   if (isRoomHost) memoryHandleFlip(cardIndex, mpClientId);
 }
 
-function memoryStartGame() {
+function memoryBeginRound(players, pairCount) {
+  if (memoryState.resolveTimer) {
+    clearTimeout(memoryState.resolveTimer);
+    memoryState.resolveTimer = 0;
+  }
+  const cards = memoryBuildDeck(pairCount);
+  memoryState.active = true;
+  memoryState.finished = false;
+  memoryState.pairCount = pairCount;
+  memoryState.cols = memoryGridCols(cards.length);
+  memoryState.cards = cards;
+  memoryState.players = players.map((p) => ({ ...p, score: 0 }));
+  memoryState.turnPlayerId = memoryState.players[0].id;
+  memoryState.firstPick = null;
+  memoryState.phase = "pick";
+  memoryState.resultText = "";
+  memoryState.message = `Bat dau! ${memoryState.players[0].name} di truoc. Tim ${pairCount} cap.`;
+  if (memoryOverlay) memoryOverlay.classList.add("section-hidden");
+  memorySyncState();
+}
+
+function memoryStartOnlineGame() {
   if (memoryMpInRoom() && !isRoomHost) {
     sendRoomMsg({ kind: "memory_start" }, { toHostOnly: true });
     return;
@@ -2209,38 +2258,81 @@ function memoryStartGame() {
     return;
   }
 
-  if (memoryState.resolveTimer) {
-    clearTimeout(memoryState.resolveTimer);
-    memoryState.resolveTimer = 0;
-  }
-
-  const pairCount = memoryNormalizePairCount();
-  const cards = memoryBuildDeck(pairCount);
+  memoryState.mode = "online";
+  const pairCount = memoryNormalizePairCount(memoryPairCountInput);
   const other = rosterList.find((p) => p.id !== mpClientId) || rosterList[1];
   const players = [
     { id: mpClientId, name: myPlayerName || memoryRoster[mpClientId] || "Host", score: 0 },
     { id: other.id, name: other.name, score: 0 }
   ];
+  memoryBeginRound(players, pairCount);
+}
 
-  memoryState.active = true;
-  memoryState.finished = false;
-  memoryState.pairCount = pairCount;
-  memoryState.cols = memoryGridCols(cards.length);
-  memoryState.cards = cards;
-  memoryState.players = players;
-  memoryState.turnPlayerId = players[0].id;
-  memoryState.firstPick = null;
-  memoryState.phase = "pick";
-  memoryState.resultText = "";
-  memoryState.message = `Bat dau! ${players[0].name} di truoc. Tim ${pairCount} cap.`;
-  if (memoryOverlay) memoryOverlay.classList.add("section-hidden");
-  memorySyncState();
+function memoryStartLocalGame() {
+  if (memoryLocalPlayers.length < 2) {
+    if (memoryMessageText) memoryMessageText.textContent = "Can it nhat 2 nguoi trong danh sach.";
+    memoryRenderLocalPlayerList();
+    return;
+  }
+  memoryState.mode = "local";
+  const pairCount = memoryNormalizePairCount(memoryLocalPairCountInput);
+  const players = memoryLocalPlayers.map((p) => ({ id: p.id, name: p.name, score: 0 }));
+  memoryStepConnect?.classList.add("section-hidden");
+  memoryStepGame?.classList.remove("section-hidden");
+  memoryApplyHostPermissions();
+  memoryBeginRound(players, pairCount);
+}
+
+function memorySetUiMode(mode) {
+  memoryUiMode = mode === "local" ? "local" : "online";
+  memoryModeOnlineBtn?.classList.toggle("is-active", memoryUiMode === "online");
+  memoryModeLocalBtn?.classList.toggle("is-active", memoryUiMode === "local");
+  memoryOnlinePanel?.classList.toggle("section-hidden", memoryUiMode !== "online");
+  memoryLocalPanel?.classList.toggle("section-hidden", memoryUiMode !== "local");
+}
+
+function memoryRenderLocalPlayerList() {
+  if (!memoryLocalPlayerList) return;
+  memoryLocalPlayerList.innerHTML = "";
+  memoryLocalPlayers.forEach((p, idx) => {
+    const li = document.createElement("li");
+    const name = document.createElement("span");
+    name.textContent = `${idx + 1}. ${p.name}`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "memory-local-remove";
+    btn.textContent = "Xoa";
+    btn.addEventListener("click", () => {
+      memoryLocalPlayers.splice(idx, 1);
+      memoryRenderLocalPlayerList();
+    });
+    li.append(name, btn);
+    memoryLocalPlayerList.appendChild(li);
+  });
+  if (!memoryLocalPlayers.length) {
+    const li = document.createElement("li");
+    li.textContent = "Chua co nguoi choi.";
+    li.style.opacity = "0.7";
+    memoryLocalPlayerList.appendChild(li);
+  }
+}
+
+function memoryAddLocalPlayer() {
+  const raw = (memoryLocalNameInput?.value || "").trim();
+  memoryLocalIdSeq += 1;
+  const name = raw || `Player ${memoryLocalIdSeq}`;
+  memoryLocalPlayers.push({ id: `local-${memoryLocalIdSeq}`, name: name.slice(0, 24) });
+  if (memoryLocalNameInput) {
+    memoryLocalNameInput.value = "";
+    memoryLocalNameInput.placeholder = `Player ${memoryLocalIdSeq + 1}`;
+  }
+  memoryRenderLocalPlayerList();
 }
 
 function memoryHandleRoomMsg(data, fromId) {
   if (!data || !data.kind) return;
   if (data.kind === "memory_start" && isRoomHost) {
-    memoryStartGame();
+    memoryStartOnlineGame();
   } else if (data.kind === "memory_need_state" && isRoomHost) {
     memorySyncState();
   } else if (data.kind === "memory_flip" && isRoomHost) {
@@ -2281,6 +2373,7 @@ function connectMemoryMultiplayer() {
       memoryClearRoster();
       memoryMergeRoster(msg.peers);
       memoryRoster[mpClientId] = myPlayerName;
+      memoryState.mode = "online";
       memoryStepConnect?.classList.add("section-hidden");
       memoryStepGame?.classList.remove("section-hidden");
       memoryApplyHostPermissions();
@@ -2334,8 +2427,33 @@ function connectMemoryMultiplayer() {
 
 function initMemoryBindings() {
   if (memoryMpConnectBtn) memoryMpConnectBtn.addEventListener("click", connectMemoryMultiplayer);
-  if (memoryStartBtn) memoryStartBtn.addEventListener("click", memoryStartGame);
-  if (memoryPlayAgainBtn) memoryPlayAgainBtn.addEventListener("click", memoryStartGame);
+  if (memoryStartBtn) memoryStartBtn.addEventListener("click", memoryStartOnlineGame);
+  if (memoryPlayAgainBtn) {
+    memoryPlayAgainBtn.addEventListener("click", () => {
+      if (memoryIsLocalMode()) memoryStartLocalGame();
+      else memoryStartOnlineGame();
+    });
+  }
+  if (memoryModeOnlineBtn) {
+    memoryModeOnlineBtn.addEventListener("click", () => memorySetUiMode("online"));
+  }
+  if (memoryModeLocalBtn) {
+    memoryModeLocalBtn.addEventListener("click", () => memorySetUiMode("local"));
+  }
+  if (memoryAddLocalPlayerBtn) {
+    memoryAddLocalPlayerBtn.addEventListener("click", memoryAddLocalPlayer);
+  }
+  if (memoryLocalNameInput) {
+    memoryLocalNameInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        memoryAddLocalPlayer();
+      }
+    });
+  }
+  if (memoryLocalStartBtn) memoryLocalStartBtn.addEventListener("click", memoryStartLocalGame);
+  memorySetUiMode("online");
+  memoryRenderLocalPlayerList();
 }
 
 function setupAppNavigation() {

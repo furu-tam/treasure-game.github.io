@@ -960,12 +960,83 @@ button.menu-card p {
   justify-content: center;
 }
 
+.memory-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
 .memory-score-pill strong {
   color: #facc15;
 }
 
+.memory-score-pill--turn {
+  border-color: rgba(250, 204, 21, 0.55);
+  box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.25);
+}
+
 .memory-turn-pill strong {
   color: #93c5fd;
+}
+
+.memory-mode-pick {
+  margin-bottom: 12px;
+}
+
+.memory-mode-btn {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.memory-mode-btn.is-active {
+  background: var(--primary);
+  color: #052e16;
+}
+
+.memory-subtitle {
+  font-size: 15px;
+  color: #93c5fd;
+  margin: 0 0 10px;
+  font-weight: 600;
+}
+
+.memory-local-hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.memory-local-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.memory-local-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+}
+
+.memory-local-remove {
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  background: rgba(239, 68, 68, 0.25);
+  color: #fecaca;
 }
 
 .memory-board-wrap {

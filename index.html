@@ -37,7 +37,7 @@
       <button type="button" class="menu-card menu-card--memory" data-app-view="memory">
         <span class="menu-card__icon" aria-hidden="true">🃏</span>
         <h2>Lat The</h2>
-        <p>Tim 2 la giong nhau, 2 nguoi choi luot phien qua WebSocket.</p>
+        <p>Tim 2 la giong nhau. Online 2 nguoi hoac cung 1 may nhieu nguoi.</p>
       </button>
     </main>
 
@@ -225,14 +225,42 @@
     <button type="button" class="nav-back" data-app-view="menu">← Trang chu</button>
     <section class="memory-panel">
       <section class="step-card" id="memoryStepConnect">
-        <h2>Lat The — Ket noi</h2>
-        <div class="controls">
-          <label>
-            Ten nguoi choi
-            <input id="memoryPlayerNameInput" type="text" maxlength="24" placeholder="De trong = Player1, Player2..." />
-          </label>
-          <button class="btn btn-start" type="button" id="memoryMpConnectBtn">OK</button>
-          <span class="pill mp-status" id="memoryMpStatusText">Offline</span>
+        <h2>Lat The</h2>
+        <div class="memory-mode-pick controls">
+          <button type="button" class="btn memory-mode-btn is-active" id="memoryModeOnlineBtn" data-memory-mode="online">Online</button>
+          <button type="button" class="btn memory-mode-btn" id="memoryModeLocalBtn" data-memory-mode="local">Cung 1 may</button>
+        </div>
+
+        <div id="memoryOnlinePanel">
+          <h3 class="memory-subtitle">Ket noi WebSocket</h3>
+          <div class="controls">
+            <label>
+              Ten nguoi choi
+              <input id="memoryPlayerNameInput" type="text" maxlength="24" placeholder="De trong = Player1, Player2..." />
+            </label>
+            <button class="btn btn-start" type="button" id="memoryMpConnectBtn">OK</button>
+            <span class="pill mp-status" id="memoryMpStatusText">Offline</span>
+          </div>
+        </div>
+
+        <div id="memoryLocalPanel" class="section-hidden">
+          <h3 class="memory-subtitle">Dang ky nguoi choi tren may</h3>
+          <p class="memory-local-hint">Them it nhat 2 nguoi. Luot lan luot lat 2 la; trung cap duoc +1 diem va lat tiep.</p>
+          <div class="controls">
+            <label>
+              Ten
+              <input id="memoryLocalNameInput" type="text" maxlength="24" placeholder="Player 1" />
+            </label>
+            <button type="button" class="btn btn-start" id="memoryAddLocalPlayerBtn">Them nguoi</button>
+          </div>
+          <ul class="memory-local-list" id="memoryLocalPlayerList" aria-label="Danh sach nguoi choi"></ul>
+          <div class="controls">
+            <label>
+              So cap the
+              <input id="memoryLocalPairCountInput" type="number" min="2" max="12" value="8" />
+            </label>
+            <button type="button" class="btn btn-start" id="memoryLocalStartBtn">Bat dau choi</button>
+          </div>
         </div>
       </section>
 
@@ -248,10 +276,9 @@
         </section>
 
         <div class="memory-hud">
-          <span class="pill memory-score-pill" id="memoryScore1Pill">P1: <strong id="memoryScore1Text">0</strong></span>
           <span class="pill memory-turn-pill">Luot: <strong id="memoryTurnText">—</strong></span>
-          <span class="pill memory-score-pill" id="memoryScore2Pill">P2: <strong id="memoryScore2Text">0</strong></span>
         </div>
+        <div class="memory-scores" id="memoryScoresRow" aria-label="Bang diem"></div>
 
         <p class="message" id="memoryMessageText">Ket noi de choi.</p>
 
